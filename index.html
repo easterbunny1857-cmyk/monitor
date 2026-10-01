@@ -137,7 +137,7 @@ function calc(){const d=data,C={MF:[0,0],Stocks:[0,0],Gold:[0,0],PPF:[0,0],Prope
  return{C,gross,inv,loans,net:gross-loans,income:sum(d.income,r=>r.Monthly),sip:sum(d.mf,r=>r.SIP),ppfM:sum(d.ppf,r=>r.YearlyDeposit)/12}}
 // ---- table widgets ----
 const TB={
- mf:['Mutual Funds & SIPs','mf',[['Fund',r=>`<b>${r.Fund}</b><br><span class="mu">${[r.Category,r.Account].filter(Boolean).join(' · ')}</span>`],['Value',r=>inr(r.Units*r.NAV)],['P&L',r=>pl(r.Units*r.NAV,r.Units*r.AvgNAV)],['SIP',r=>r.SIP?inr(r.SIP)+'/mo':'—']],r=>r.Units*r.NAV],
+ mf:['Mutual Funds & SIPs','mf',[['Fund',r=>`<b>${r.Fund}</b><br><span class="mu">${[r.Category,r.Account].filter(Boolean).join(' · ')}</span><br><span class="mu" style="font-size:11px">NAV ₹${n(r.NAV).toFixed(2)}${r.NavDate?' · '+r.NavDate:''} · ${r.Matched?'AMFI: '+r.Matched:'from statement'}</span>`],['Value',r=>inr(r.Units*r.NAV)],['P&L',r=>pl(r.Units*r.NAV,r.Units*r.AvgNAV)],['SIP',r=>r.SIP?inr(r.SIP)+'/mo':'—']],r=>r.Units*r.NAV],
  stocks:['Stocks','stocks',[['Stock',r=>`<b>${r.Symbol}</b><br><span class="mu">${[r.Name,r.Account].filter(Boolean).join(' · ')}</span>`],['Qty',r=>n(r.Qty)],['Value',r=>inr(r.Qty*r.CMP)],['P&L',r=>pl(r.CMP,r.AvgPrice)]],r=>r.Qty*r.CMP],
  gold:['Gold','gold',[['Type',r=>`<b>${r.Type||r.Symbol}</b>${r.Qty?`<br><span class="mu">${r.Qty} units${r.Account?' · '+r.Account:''}</span>`:''}`],['Price',r=>'₹'+n(r.CMP).toLocaleString('en-IN')],['Value',r=>inr(r.Qty?r.Qty*r.CMP:r.Grams*r.RatePerGram)],['P&L',r=>r.Qty?pl(r.CMP,r.AvgPrice):pl(r.RatePerGram,r.AvgPrice)]],r=>r.Qty?r.Qty*r.CMP:r.Grams*r.RatePerGram],
  ppf:['PPF','ppf',[['Account',r=>`<b>${r.Account}</b>`],['Balance',r=>inr(r.Balance)],['Rate',r=>n(r.Rate)+'%'],['Matures',r=>r.Maturity||'—']],r=>r.Balance],
@@ -273,7 +273,7 @@ window.ed=(key,i)=>{const row=i<0?{}:data[key][i];cur={key,i};
  const ks=key==='gold'?['Type','Symbol','Qty','AvgPrice','CMP','Account']:[...new Set([...FIELDS[key],...Object.keys(row).filter(k=>!HID.includes(k))])];
  $('#edt').textContent=(i<0?'Add ':'Edit ')+key;
  $('#edf').innerHTML=ks.map(k=>`<div class="mu" style="font-size:11px">${k}</div><input data-k="${k}" inputmode="${TXT.has(k)?'text':'decimal'}" value="${String(row[k]??'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px;margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit">`).join('');
- $('#edd').textContent='Delete';delete $('#edd').dataset.sure;$('#edd').style.display=i<0?'none':'block';$('#edlg').showModal()};
+ if(key==='mf')$('#edf').insertAdjacentHTML('beforeend',`<div class="mu" style="font-size:11px;margin-top:6px">NAV source</div><div style="margin-bottom:6px">${row.Matched?row.Matched+(row.NavDate?' · '+row.NavDate:''):'Not matched yet (using statement NAV)'}</div><button class="btn" onclick="pickScheme()">Change NAV scheme…</button>`);$('#edd').textContent='Delete';delete $('#edd').dataset.sure;$('#edd').style.display=i<0?'none':'block';$('#edlg').showModal()};
 $('#eds').onclick=()=>{const{key,i}=cur,o=i<0?{}:{...data[key][i]};
  document.querySelectorAll('#edf input').forEach(x=>{const k=x.dataset.k,v=x.value.trim(),c=v.replace(/,/g,'');if(v==='')delete o[k];else o[k]=(!TXT.has(k)&&/^-?\d*\.?\d+$/.test(c))?+c:v});
  if(i<0){if(!Object.keys(o).length){$('#edlg').close();return}data[key].push(o)}else data[key][i]=o;
@@ -292,7 +292,7 @@ $('#z').onchange=async e=>{let t=[0,0,0];
   const dupOf=[['stocks',p.stocks,'Symbol','Qty'],['mf',p.mf,'Fund','Units'],['gold',p.gold,'Symbol','Qty']].map(([key,rows,k,q])=>rows.length?same(key,rows,k,q,acc):null).find(Boolean);
   if(dupOf){const c=await modal({text:'These holdings are identical to account "'+dupOf+'", which is already imported. Importing them again would double your portfolio.',buttons:[['Replace "'+dupOf+'"','replace','p'],['Keep both (different accounts)','both'],['Skip this file',null]]});if(c===null)continue;if(c==='replace')acc=dupOf}
   const put=(key,rows,k)=>{const etf=o=>key!=='gold'||o.Qty,old=data[key],prev=old.filter(o=>etf(o)&&o.Account===acc);
-   data[key]=old.filter(o=>!etf(o)||(o.Account&&o.Account!==acc)).concat(rows.map(r=>{const o=prev.find(x=>x[k]===r[k]);return{...(o||{}),...r,Account:acc,SIP:o?.SIP??r.SIP,Category:o?.Category??r.Category,Name:o?.Name||r.Name,SchemeCode:o?.SchemeCode}}))};
+   data[key]=old.filter(o=>!etf(o)||(o.Account&&o.Account!==acc)).concat(rows.map(r=>{const o=prev.find(x=>x[k]===r[k]);return{...(o||{}),...r,Account:acc,SIP:o?.SIP??r.SIP,Category:o?.Category??r.Category,Name:o?.Name||r.Name,SchemeCode:o?.SchemeCode,NavDate:undefined}}))};
   if(p.stocks.length)put('stocks',p.stocks,'Symbol');if(p.mf.length)put('mf',p.mf,'Fund');if(p.gold.length)put('gold',p.gold,'Symbol');
   t[0]+=p.stocks.length;t[1]+=p.mf.length;t[2]+=p.gold.length}
   save();render();st(`Imported ${t[0]} stocks, ${t[1]} funds, ${t[2]} gold ETFs`)}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
@@ -380,6 +380,14 @@ async function pdfLib(){if(PDFJS)return PDFJS;const mk=id=>URL.createObjectURL(n
 async function readPdf(f){const lib=await pdfLib(),task=lib.getDocument({data:new Uint8Array(await f.arrayBuffer())});
  task.onPassword=(upd,why)=>{ask((why===2?'Wrong password. ':'')+'This PDF is password protected. Enter the password for '+f.name+':','').then(p=>p?upd(p):task.destroy())};
  return pdfToRows(await task.promise)}
+window.pickScheme=async()=>{const row=data.mf[cur.i];if(!row)return;
+ const q=await ask('Search the AMFI scheme list. Try the fund name plus "direct growth".',row.Fund);if(!q)return;
+ let res;try{res=await J('https://api.mfapi.in/mf/search?q='+encodeURIComponent(q))}catch(e){await say('Search failed. Check your internet connection and try again.');return}
+ res=(res||[]).slice(0,12);if(!res.length){await say('No schemes found. Try fewer words.');return}
+ const pick=await modal({text:'Tap the scheme whose NAV should be used:',buttons:[...res.map(r=>[r.schemeName,r,'']),['Cancel',null]]});if(!pick)return;
+ row.SchemeCode=pick.schemeCode;row.Matched=pick.schemeName;
+ try{const j=await J('https://api.mfapi.in/mf/'+pick.schemeCode+'/latest');row.NAV=+j.data[0].nav;row.NavDate=j.data[0].date}catch(e){}
+ save();$('#edlg').close();render();st('NAV scheme updated')};
 render();
 </script><script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js').catch(function(){});</script>
 </body></html>
