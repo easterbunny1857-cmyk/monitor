@@ -231,12 +231,12 @@ async function schemeFor(r){if(r.SchemeCode)return r.SchemeCode;
  const sc=x=>{const s=x.schemeName.toLowerCase();return w.filter(t=>s.includes(t)).length*10-s.length/100+(w.includes('direct')===s.includes('direct')?5:0)+(w.includes('growth')===s.includes('growth')?5:0)};
  const b=res.sort((a,c)=>sc(c)-sc(a))[0];if(!b)throw Error('no match');r.SchemeCode=b.schemeCode;r.Matched=b.schemeName;return b.schemeCode}
 $('#rf').onclick=async()=>{st('Refreshing…');let ok=0,bad=[];
- await Promise.all([...data.stocks.map(async r=>{try{const j=await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(String(r.Ticker||r.Symbol).replace(/-[A-Z]{1,2}$/,''))}.NS?range=1d&interval=1d`),p=j.chart.result[0].meta.regularMarketPrice;if(p){r.CMP=p;ok++}else throw 0}catch(e){bad.push(r.Symbol)}}),
+ await Promise.all([...data.stocks.map(async r=>{try{const j=await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(String(r.Ticker||r.Symbol).replace(/-[A-Z]{1,2}$/,''))}.NS?range=1d&interval=1d`),mt=j.chart.result[0].meta,p=mt.regularMarketPrice;if(p){r.CMP=p;const pv=mt.chartPreviousClose??mt.previousClose;if(pv){r.Prev=pv;r.PrevDate=iso()}ok++}else throw 0}catch(e){bad.push(r.Symbol)}}),
   ...data.gold.filter(g=>g.Qty).map(async g=>{try{const p=(await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(g.Symbol)}.NS?range=1d&interval=1d`)).chart.result[0].meta.regularMarketPrice;if(!p)throw 0;g.CMP=p;ok++}catch(e){bad.push(g.Symbol)}}),
   ...(data.gold.some(g=>!g.Qty)?[(async()=>{try{const p=(await J('https://query1.finance.yahoo.com/v8/finance/chart/GOLDIETF.NS?range=1d&interval=1d')).chart.result[0].meta.regularMarketPrice;
    if(CFG.rate0&&!CFG.gpu){CFG.gpu=p/CFG.rate0;delete CFG.rate0;LS('wl2_cfg',CFG)}
    if(!CFG.gpu){bad.push('Gold (calibrate in ⚙)');return}data.gold.filter(g=>!g.Qty).forEach(g=>g.RatePerGram=+(p/CFG.gpu).toFixed(2));ok++}catch(e){bad.push('Gold')}})()]:[]),
-  ...data.mf.map(async r=>{try{const j=await J(`https://api.mfapi.in/mf/${await schemeFor(r)}/latest`);r.NAV=+j.data[0].nav;r.NavDate=j.data[0].date;ok++}catch(e){bad.push(r.Fund)}})]);
+  ...data.mf.map(async r=>{try{const j=await navFor(r);r.NAV=+j.data[0].nav;r.NavDate=j.data[0].date;ok++}catch(e){bad.push(r.Fund)}})]);
  save();render();
  st(!ok&&bad.length?'Blocked by browser/network — open the file locally or set a proxy (⚙)':`Updated ${ok}${bad.length?` · failed: ${bad.slice(0,3).join(', ')}${bad.length>3?'…':''}`:''} · ${new Date().toLocaleTimeString()}`)};
 // ---- Excel export ----
@@ -258,7 +258,7 @@ viaX=async(e,old)=>{try{await loadX()}catch(_){alert('Reading .xlsx needs an int
 const saveText=async(text,fn)=>{const f=new File([text],fn,{type:'text/csv'});try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}}catch(e){if(e.name==='AbortError')return}const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=fn;a.click()};
 $('#tpl').onclick=()=>saveText(toCsv(sample()),'wealthlab_template.csv');
 $('#exp').onclick=()=>saveText(toCsv(data),'wealthlab_portfolio.csv');
-$('#f').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=fromCsv(await file.text());if(!d){alert('Not a WealthLab CSV. Use Template for the format, or Zerodha import for holdings files.')}else{data=d;save();render();st('Imported')}}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
+$('#f').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=fromCsv(await file.text());if(!d){alert('Not a WealthLab CSV. Use Template for the format, or Zerodha import for holdings files.')}else{d.hist=data.hist;data=d;save();render();st('Imported')}}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
 $('#z').onchange=async e=>{let mf=[],stk=[],gld=[];if(isX(e))return viaX(e,oldZ);try{for(const file of e.target.files){const p=parseHoldings(csvParse(await file.text()));if(p){mf=mf.concat(p.mf);stk=stk.concat(p.stocks);gld=gld.concat(p.gold)}}
  if(!mf.length&&!stk.length&&!gld.length){alert('No holdings table found. Use a Zerodha Console holdings file saved as CSV, with a Symbol or Instrument column.');return}
  const keep=(old,key,r)=>{const o=old.find(x=>x[key]===r[key]);return o?{...o,...r,SIP:o.SIP,Category:o.Category,Name:o.Name||r.Name,SchemeCode:o.SchemeCode}:r};
@@ -388,6 +388,45 @@ window.pickScheme=async()=>{const row=data.mf[cur.i];if(!row)return;
  row.SchemeCode=pick.schemeCode;row.Matched=pick.schemeName;
  try{const j=await J('https://api.mfapi.in/mf/'+pick.schemeCode+'/latest');row.NAV=+j.data[0].nav;row.NavDate=j.data[0].date}catch(e){}
  save();$('#edlg').close();render();st('NAV scheme updated')};
+const dts=d=>{const[a,b,c]=String(d).split('-');return new Date(+c,+b-1,+a).getTime()},isFresh=d=>Date.now()-dts(d)<15*864e5;
+function schemeScore(fund,s){const w=String(fund).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>2);s=s.toLowerCase();
+ return w.filter(t=>s.includes(t)).length*10-s.length/100+(w.includes('direct')===s.includes('direct')?5:0)+(w.includes('growth')===s.includes('growth')?5:0)-(!/idcw|dividend|bonus|payout/.test(w.join(' '))&&/idcw|dividend|bonus|payout/.test(s)?8:0)}
+async function navFor(r){
+ if(r.SchemeCode){try{const j=await J('https://api.mfapi.in/mf/'+r.SchemeCode+'/latest');if(isFresh(j.data[0].date))return j}catch(e){}r.SchemeCode='';r.Matched=''}
+ const w=String(r.Fund).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(x=>x.length>2),res=await J('https://api.mfapi.in/mf/search?q='+encodeURIComponent(w.slice(0,3).join(' ')));
+ const c=(res||[]).sort((a,b)=>schemeScore(r.Fund,b.schemeName)-schemeScore(r.Fund,a.schemeName)).slice(0,8);
+ const got=await Promise.all(c.map(async x=>{try{const j=await J('https://api.mfapi.in/mf/'+x.schemeCode+'/latest');return isFresh(j.data[0].date)?{x,j}:null}catch(e){return null}}));
+ const b=got.find(Boolean);if(!b)throw Error('no current NAV found');r.SchemeCode=b.x.schemeCode;r.Matched=b.x.schemeName;return b.j}
+window.pickScheme=async()=>{const row=data.mf[cur.i];if(!row)return;
+ const q=await ask('Search the AMFI scheme list. Try the fund name plus "direct growth".',row.Fund);if(!q)return;
+ let res;try{res=await J('https://api.mfapi.in/mf/search?q='+encodeURIComponent(q))}catch(e){await say('Search failed. Check your internet connection and try again.');return}
+ const got=(await Promise.all((res||[]).slice(0,10).map(async x=>{try{const j=await J('https://api.mfapi.in/mf/'+x.schemeCode+'/latest');return{x,nav:j.data[0].nav,date:j.data[0].date}}catch(e){return null}}))).filter(Boolean).sort((a,b)=>dts(b.date)-dts(a.date));
+ if(!got.length){await say('No schemes found. Try fewer words.');return}
+ const pick=await modal({text:'Tap the scheme whose NAV should be used. Newest NAV dates are listed first; avoid ones with an old date.',buttons:[...got.map(g=>[g.x.schemeName+' · NAV '+g.nav+' · '+g.date+(isFresh(g.date)?'':' (old)'),g,'']),['Cancel',null]]});if(!pick)return;
+ row.SchemeCode=pick.x.schemeCode;row.Matched=pick.x.schemeName;row.NAV=+pick.nav;row.NavDate=pick.date;save();$('#edlg').close();render();st('NAV scheme updated')};
+
+// ---- daily stocks summary (price history snapshots + Yahoo previous close) ----
+TYPES.daily='Daily Stocks Summary';
+function iso(){return new Date().toISOString().slice(0,10)}
+function dayS(){const m={};data.stocks.forEach(r=>{const k=r.Symbol;if(!m[k])m[k]=[n(r.CMP),0];m[k][1]+=n(r.Qty)});return m}
+function snap(){if(!data.stocks.length)return;data.hist=data.hist||{};const t=iso(),m=dayS(),o={};Object.keys(m).forEach(k=>o[k]=[+m[k][0].toFixed(2),+m[k][1].toFixed(3)]);
+ if(JSON.stringify(data.hist[t])!==JSON.stringify(o)){data.hist[t]=o;const ks=Object.keys(data.hist).sort();while(ks.length>120)delete data.hist[ks.shift()];LS('wl2_data',data)}}
+function dayChanges(){const t=iso(),ks=Object.keys(data.hist||{}).filter(k=>k<t).sort(),pk=ks[ks.length-1],P=pk?data.hist[pk]:{},m=dayS(),out=[];
+ Object.keys(m).forEach(k=>{const[cmp,q]=m[k],rr=data.stocks.find(x=>x.Symbol===k);let prev=null;
+  if(rr&&rr.Prev&&rr.PrevDate&&(Date.now()-new Date(rr.PrevDate))<4*864e5)prev=rr.Prev;else if(P[k])prev=P[k][0];
+  if(prev==null||!cmp)return;out.push({k,q,cmp,prev,d:q*(cmp-prev),p:(cmp-prev)/prev*100})});return{out,pk}}
+function histRows(){const ks=Object.keys(data.hist||{}).sort(),rows=[];
+ for(let i=ks.length-1;i>0&&rows.length<7;i--){const a=data.hist[ks[i]],b=data.hist[ks[i-1]];let d=0,v=0,pv=0;
+  Object.keys(a).forEach(k=>{v+=a[k][0]*a[k][1];if(b[k]){d+=a[k][1]*(a[k][0]-b[k][0]);pv+=a[k][1]*b[k][0]}});rows.push({date:ks[i],v,d,p:pv?d/pv*100:0})}return rows}
+SUM.daily=()=>{const{out,pk}=dayChanges(),sg=v=>(v>0?'+':'')+inr(v),cl=v=>v>=0?'up':'dn',tot=out.reduce((s,x)=>s+x.d,0),base=out.reduce((s,x)=>s+x.q*x.prev,0),pc=base?tot/base*100:0,all=new Set(data.stocks.map(x=>x.Symbol)).size;
+ if(!out.length)return`<p class="mu">No previous prices to compare yet. Tap <b>⟳ Live prices</b> today. Tomorrow's refresh or holdings import will show the day's change here.</p>`;
+ const g=[...out].sort((a,b)=>b.d-a.d).filter(x=>x.d>0).slice(0,3),l=[...out].sort((a,b)=>a.d-b.d).filter(x=>x.d<0).slice(0,3),line=x=>`<div class="l" style="margin-bottom:4px"><span>${x.k}</span><span class="${cl(x.d)}">${sg(x.d)} · ${x.p>0?'+':''}${x.p.toFixed(1)}%</span></div>`,hr=histRows();
+ return`<div class="mu" style="font-size:10px">STOCKS · LATEST DAY</div><div class="big ${cl(tot)}">${sg(tot)}</div><div class="${cl(tot)}">${pc>0?'+':''}${pc.toFixed(2)}%</div><div class="mu" style="font-size:11px;margin-bottom:10px">${out.length} of ${all} stocks · vs ${pk||'previous close'}</div>`+
+ (g.length?`<div class="mu" style="font-size:10px">TOP GAINERS</div>${g.map(line).join('')}`:'')+(l.length?`<div class="mu" style="font-size:10px;margin-top:8px">TOP LOSERS</div>${l.map(line).join('')}`:'')+
+ (hr.length?`<div class="mu" style="font-size:10px;margin-top:12px">LAST DAYS</div><table>${hr.map(x=>`<tr><td>${x.date}</td><td>${inr(x.v)}</td><td class="${cl(x.d)}">${sg(x.d)} (${x.p>0?'+':''}${x.p.toFixed(1)}%)</td></tr>`).join('')}</table>`:'')};
+{const _r0=render;render=function(){_r0();try{snap()}catch(e){}}}
+if(!LS('wl2_dd')&&!tabs.some(t=>t.w.some(w=>w.t==='daily'))){tabs[0].w.splice(2,0,{id:Date.now()+1,t:'daily',s:''});LS('wl2_dd',1);save()}
+
 render();
 </script><script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js').catch(function(){});</script>
 </body></html>
