@@ -350,6 +350,17 @@ async function pdfToRows(doc){
  lines.forEach(l=>{l.it.sort((a,b)=>a.x-b.x);l.c=[];l.it.forEach(i=>{const t=l.c[l.c.length-1];if(t&&i.x-t.x1<4){t.s+=(i.x-t.x1>1?' ':'')+i.s;t.x1=i.x+i.w}else l.c.push({s:i.s,x0:i.x,x1:i.x+i.w})})});
  const text=lines.map(l=>l.c.map(c=>c.s).join(' | ')).join('\n'),ISIN=/\bIN[EF][0-9A-Z]{9}\b/,ctr=c=>(c.x0+c.x1)/2;
  const L=lines.map(l=>l.c.map(c=>c.s).join(' '));
+ if(L.some(x=>/Portfolio Valuation/i.test(x))&&L.some(x=>/Section 2/i.test(x))){
+  const s2=L.findIndex(x=>/Section 2/i.test(x)),e2=L.findIndex((x,i)=>i>s2&&/Section 3/i.test(x)),end=e2<0?lines.length:e2,nm=v=>+String(v||'').replace(/,/g,'')||0,o=[['Scheme Name','Folio','Category','Units','Invested Value','Current Value']];let amc='',pend=null;
+  const clean=n=>{n=n.replace(/\((non-)?demat\)/gi,'').replace(/\((formerly|erstwhile)[^)]*\)/gi,'').replace(/\s*\([A-Z0-9]{3,8}\)\s*$/,'').replace(/\bDG\b/g,'Direct Growth').replace(/\bDir\b/g,'Direct').replace(/-Gr\b/g,' Growth').replace(/\s+/g,' ').trim();const w=amc.split(' ')[0];return w&&!n.toLowerCase().startsWith(w.toLowerCase())?amc+' '+n:n},
+  flush=()=>{if(pend&&pend.units>0)o.push([clean(pend.name),pend.folio,pend.cat,pend.units,pend.cost,pend.cur]);pend=null};
+  for(let i=s2+1;i<end;i++){const cs=lines[i].c,t=L[i].trim();
+   if(/^(Group )?Total\b/i.test(t)){flush();continue}
+   const am=cs.length===1&&t.match(/^(.*?)\s+Mutual Fund$/i);if(am){flush();amc=am[1];continue}
+   const fi=cs.findIndex(c=>/^\d{4,}(\/\d+)?$/.test(c.s)),di=cs.findIndex(c=>/^\d{2}\/\d{2}\/\d{4}$/.test(c.s));
+   if(fi>0&&di>fi){flush();pend={name:cs.slice(0,fi-1).map(c=>c.s).join(' '),cat:cs[fi-1].s,folio:cs[fi].s,units:nm(cs[di-1].s),cur:nm(cs[di+1]&&cs[di+1].s),cost:nm(cs[di+2]&&cs[di+2].s)};continue}
+   if(pend&&!/^(Unit\b|Scheme\b|Balance\b|Section|Portfolio|For:|MBPF|\(\$\)|\(\*\))/i.test(t))pend.name+=' '+t}
+  flush();return{rows:o.length>1?o:null,text}}
  if(L.some(x=>/Closing Unit Balance/i.test(x))){const nm=v=>+String(v||'').replace(/,/g,'')||0,g=(re,t)=>{const m=t.match(re);return m?nm(m[1]):0},o=[['Scheme Name','ISIN','Units','Invested Value','NAV','Current Value']];let cur=null;
   L.forEach((x,i)=>{const m=x.match(/^(.*?)\s*-?\s*ISIN:?\s*(IN[EF][0-9A-Z]{9})/i);if(m)cur={name:m[1].replace(/^[A-Z]?\d+[A-Z0-9]*\s*-\s*/,'').replace(/\s*-\s*$/,'').trim(),isin:m[2]};
    if(cur&&/Closing Unit Balance/i.test(x)){const t=L.slice(i,i+3).join(' '),u=g(/Closing Unit Balance:?\s*([\d,]+\.?\d*)/i,t);
