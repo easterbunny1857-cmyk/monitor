@@ -197,11 +197,11 @@ const norm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9]/g,''),num=v=>+Strin
 function parseHoldings(rows){
  const hi=rows.findIndex(r=>r.some(c=>['symbol','instrument','stockname','companyname','scripname'].includes(norm(c))));if(hi<0)return null;
  const H=rows[hi].map(norm),f=(...ks)=>H.findIndex(h=>ks.some(k=>h===k||h.startsWith(k))),
- iS=f('symbol','instrument','stockname','companyname','scripname'),iI=f('isin'),iQ=f('quantityavailable','qty','quantity'),iA=f('averageprice','avgcost','averagebuyprice','avgprice','buyaverage'),iP=f('previousclosingprice','ltp','closingprice','currentprice','lastprice'),
+ iS=f('symbol','instrument','stockname','companyname','scripname'),iI=f('isin'),iQ=f('totalquantity','quantityavailable','qty','quantity'),iA=f('averageprice','avgcost','averagebuyprice','avgprice','avgtradingprice','buyaverage'),iP=f('previousclosingprice','ltp','closingprice','currentprice','lastprice'),
  pled=H.map((h,i)=>h.startsWith('quantitypledged')?i:-1).filter(i=>i>=0),out={mf:[],stocks:[],gold:[]};
  rows.slice(hi+1).forEach(r=>{const sym=String(r[iS]||'').trim(),q=num(r[iQ])+pled.reduce((t,i)=>t+num(r[i]),0);
   if(!sym||q<=0||/^total/i.test(sym))return;const avg=num(r[iA]),px=iP>=0?num(r[iP]):avg,isin=iI>=0?r[iI]:'';
-  if(!/\s/.test(sym)&&/GOLD|^SGB/i.test(sym))out.gold.push({Type:sym,Symbol:sym,Qty:q,AvgPrice:avg,CMP:px,ISIN:isin});else if(isin?(/^INF/i.test(isin)&&/\s/.test(sym)):/\s/.test(sym))out.mf.push({Fund:sym,Category:'',Units:q,AvgNAV:avg,NAV:px,SIP:0,ISIN:isin});
+  if(/GOLD|^SGB/i.test(sym)&&!/^INE/i.test(isin))out.gold.push({Type:sym,Symbol:sym,Qty:q,AvgPrice:avg,CMP:px,ISIN:isin});else if(isin?(/^INF/i.test(isin)&&/\s/.test(sym)):/\s/.test(sym))out.mf.push({Fund:sym,Category:'',Units:q,AvgNAV:avg,NAV:px,SIP:0,ISIN:isin});
   else out.stocks.push({Symbol:sym,Name:'',Qty:q,AvgPrice:avg,CMP:px,ISIN:isin})});
  return out}
 $('#zi').onclick=()=>$('#z').click();
@@ -223,7 +223,7 @@ async function schemeFor(r){if(r.SchemeCode)return r.SchemeCode;
  const sc=x=>{const s=x.schemeName.toLowerCase();return w.filter(t=>s.includes(t)).length*10-s.length/100+(w.includes('direct')===s.includes('direct')?5:0)+(w.includes('growth')===s.includes('growth')?5:0)};
  const b=res.sort((a,c)=>sc(c)-sc(a))[0];if(!b)throw Error('no match');r.SchemeCode=b.schemeCode;r.Matched=b.schemeName;return b.schemeCode}
 $('#rf').onclick=async()=>{st('Refreshing…');let ok=0,bad=[];
- await Promise.all([...data.stocks.map(async r=>{try{const j=await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(String(r.Symbol).replace(/-[A-Z]{1,2}$/,''))}.NS?range=1d&interval=1d`),p=j.chart.result[0].meta.regularMarketPrice;if(p){r.CMP=p;ok++}else throw 0}catch(e){bad.push(r.Symbol)}}),
+ await Promise.all([...data.stocks.map(async r=>{try{const j=await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(String(r.Ticker||r.Symbol).replace(/-[A-Z]{1,2}$/,''))}.NS?range=1d&interval=1d`),p=j.chart.result[0].meta.regularMarketPrice;if(p){r.CMP=p;ok++}else throw 0}catch(e){bad.push(r.Symbol)}}),
   ...data.gold.filter(g=>g.Qty).map(async g=>{try{const p=(await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(g.Symbol)}.NS?range=1d&interval=1d`)).chart.result[0].meta.regularMarketPrice;if(!p)throw 0;g.CMP=p;ok++}catch(e){bad.push(g.Symbol)}}),
   ...(data.gold.some(g=>!g.Qty)?[(async()=>{try{const p=(await J('https://query1.finance.yahoo.com/v8/finance/chart/GOLDIETF.NS?range=1d&interval=1d')).chart.result[0].meta.regularMarketPrice;
    if(CFG.rate0&&!CFG.gpu){CFG.gpu=p/CFG.rate0;delete CFG.rate0;LS('wl2_cfg',CFG)}
@@ -235,9 +235,9 @@ $('#rf').onclick=async()=>{st('Refreshing…');let ok=0,bad=[];
 $('#exp').onclick=()=>{const nm={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets'},wb=XLSX.utils.book_new();
  KEYS.forEach(k=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data[k]||[]),nm[k]));
  try{XLSX.writeFile(wb,'wealthlab_portfolio.xlsx')}catch(e){alert('Download blocked in this view; open the file in a browser.')}};
-const csvParse=t=>{const R=[];let r=[],c='',q=false;t=t.replace(/^\uFEFF/,'');for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else if(ch==='"')q=true;else if(ch===','){r.push(c);c=''}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);R.push(r);r=[];c=''}else c+=ch}if(c||r.length){r.push(c);R.push(r)}return R};
+const csvParse=t=>{const R=[];let r=[],c='',q=false;t=t.replace(/^\uFEFF/,'');const l1=t.split(/\r?\n/)[0],dl=(l1.match(/\t/g)||[]).length>(l1.match(/,/g)||[]).length?'\t':',';for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else if(ch==='"')q=true;else if(ch===dl){r.push(c);c=''}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);R.push(r);r=[];c=''}else c+=ch}if(c||r.length){r.push(c);R.push(r)}return R};
 const csvCell=v=>{v=v==null?'':String(v);return/[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-const NM={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets'},TXT=new Set(['Fund','Category','Symbol','Name','Type','Account','Source','Asset','Maturity','ISIN','Matched','SchemeCode','NavDate']);
+const NM={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets'},TXT=new Set(['Ticker','Fund','Category','Symbol','Name','Type','Account','Source','Asset','Maturity','ISIN','Matched','SchemeCode','NavDate']);
 const toCsv=d=>KEYS.map(k=>{const rows=d[k]||[],cols=[...new Set(rows.flatMap(Object.keys))];return['#'+NM[k],cols.map(csvCell).join(','),...rows.map(r=>cols.map(c=>csvCell(r[c])).join(','))].join('\n')}).join('\n\n')+'\n';
 const fromCsv=t=>{const rows=csvParse(t);if(!rows.some(r=>String(r[0]).startsWith('#')))return null;const d={};KEYS.forEach(k=>d[k]=[]);let key=null,hdr=null;
  for(const row of rows){const a=String(row[0]??'');if(a.startsWith('#')){key=KEYS.find(k=>NM[k].toLowerCase()===a.slice(1).trim().toLowerCase())||null;hdr=null;continue}
@@ -259,7 +259,7 @@ $('#z').onchange=async e=>{let mf=[],stk=[],gld=[];if(isX(e))return viaX(e,oldZ)
  if(gld.length)data.gold=data.gold.filter(x=>!x.Qty).concat(gld.map(r=>keep(data.gold,'Symbol',r)));
  save();render();st(`Imported ${stk.length} stocks, ${mf.length} funds, ${gld.length} gold ETFs`)}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
 // ---- tap-to-edit ----
-const FIELDS={mf:['Fund','Category','Units','AvgNAV','NAV','SIP','Account'],stocks:['Symbol','Name','Qty','AvgPrice','CMP','Account'],gold:['Type','Grams','AvgPrice','RatePerGram'],ppf:['Account','Balance','Rate','YearlyDeposit','Maturity'],property:['Name','PurchasePrice','CurrentValue','Loan'],cash:['Account','Balance'],income:['Source','Monthly'],targets:['Asset','TargetPct','TargetValue']},HID=['ISIN','Matched','NavDate','SchemeCode'];
+const FIELDS={mf:['Fund','Category','Units','AvgNAV','NAV','SIP','Account'],stocks:['Symbol','Ticker','Name','Qty','AvgPrice','CMP','Account'],gold:['Type','Grams','AvgPrice','RatePerGram'],ppf:['Account','Balance','Rate','YearlyDeposit','Maturity'],property:['Name','PurchasePrice','CurrentValue','Loan'],cash:['Account','Balance'],income:['Source','Monthly'],targets:['Asset','TargetPct','TargetValue']},HID=['ISIN','Matched','NavDate','SchemeCode'];
 let cur={};
 window.ed=(key,i)=>{const row=i<0?{}:data[key][i];cur={key,i};
  const ks=key==='gold'?['Type','Symbol','Qty','AvgPrice','CMP','Account']:[...new Set([...FIELDS[key],...Object.keys(row).filter(k=>!HID.includes(k))])];
