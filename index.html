@@ -232,7 +232,7 @@ async function schemeFor(r){if(r.SchemeCode)return r.SchemeCode;
  const b=res.sort((a,c)=>sc(c)-sc(a))[0];if(!b)throw Error('no match');r.SchemeCode=b.schemeCode;r.Matched=b.schemeName;return b.schemeCode}
 $('#rf').onclick=async()=>{st('Refreshing…');let ok=0,bad=[];
  await Promise.all([...data.stocks.map(async r=>{try{const j=await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(String(r.Ticker||r.Symbol).replace(/-[A-Z]{1,2}$/,''))}.NS?range=1d&interval=1d`),mt=j.chart.result[0].meta,p=mt.regularMarketPrice;if(p){r.CMP=p;const pv=mt.chartPreviousClose??mt.previousClose;if(pv){r.Prev=pv;r.PrevDate=iso()}ok++}else throw 0}catch(e){bad.push(r.Symbol)}}),
-  ...data.gold.filter(g=>g.Qty).map(async g=>{try{const p=(await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(g.Symbol)}.NS?range=1d&interval=1d`)).chart.result[0].meta.regularMarketPrice;if(!p)throw 0;g.CMP=p;ok++}catch(e){bad.push(g.Symbol)}}),
+  ...data.gold.filter(g=>g.Qty).map(async g=>{try{const mt=(await J(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(g.Symbol)}.NS?range=1d&interval=1d`)).chart.result[0].meta,p=mt.regularMarketPrice;if(!p)throw 0;g.CMP=p;const pv=mt.chartPreviousClose??mt.previousClose;if(pv){g.Prev=pv;g.PrevDate=iso()}ok++}catch(e){bad.push(g.Symbol)}}),
   ...(data.gold.some(g=>!g.Qty)?[(async()=>{try{const p=(await J('https://query1.finance.yahoo.com/v8/finance/chart/GOLDIETF.NS?range=1d&interval=1d')).chart.result[0].meta.regularMarketPrice;
    if(CFG.rate0&&!CFG.gpu){CFG.gpu=p/CFG.rate0;delete CFG.rate0;LS('wl2_cfg',CFG)}
    if(!CFG.gpu){bad.push('Gold (calibrate in ⚙)');return}data.gold.filter(g=>!g.Qty).forEach(g=>g.RatePerGram=+(p/CFG.gpu).toFixed(2));ok++}catch(e){bad.push('Gold')}})()]:[]),
@@ -405,25 +405,29 @@ window.pickScheme=async()=>{const row=data.mf[cur.i];if(!row)return;
  const pick=await modal({text:'Tap the scheme whose NAV should be used. Newest NAV dates are listed first; avoid ones with an old date.',buttons:[...got.map(g=>[g.x.schemeName+' · NAV '+g.nav+' · '+g.date+(isFresh(g.date)?'':' (old)'),g,'']),['Cancel',null]]});if(!pick)return;
  row.SchemeCode=pick.x.schemeCode;row.Matched=pick.x.schemeName;row.NAV=+pick.nav;row.NavDate=pick.date;save();$('#edlg').close();render();st('NAV scheme updated')};
 
-// ---- daily stocks summary (price history snapshots + Yahoo previous close) ----
-TYPES.daily='Daily Stocks Summary';
+// ---- daily summary: stocks + mutual funds + gold (price snapshots + Yahoo previous close) ----
+TYPES.daily='Daily Portfolio Summary';
 function iso(){return new Date().toISOString().slice(0,10)}
-function dayS(){const m={};data.stocks.forEach(r=>{const k=r.Symbol;if(!m[k])m[k]=[n(r.CMP),0];m[k][1]+=n(r.Qty)});return m}
-function snap(){if(!data.stocks.length)return;data.hist=data.hist||{};const t=iso(),m=dayS(),o={};Object.keys(m).forEach(k=>o[k]=[+m[k][0].toFixed(2),+m[k][1].toFixed(3)]);
+function dayS(){const m={},add=(g,pre,rows,nameF,pxF,qF)=>rows.forEach(r=>{const k=pre+nameF(r);if(!m[k])m[k]=[pxF(r),0,g,r];m[k][1]+=qF(r)});
+ add('Stocks','',data.stocks,r=>r.Symbol,r=>n(r.CMP),r=>n(r.Qty));add('Mutual funds','M:',data.mf,r=>r.Fund,r=>n(r.NAV),r=>n(r.Units));add('Gold','G:',data.gold.filter(r=>r.Qty),r=>r.Symbol,r=>n(r.CMP),r=>n(r.Qty));return m}
+function snap(){const m=dayS(),ks0=Object.keys(m);if(!ks0.length)return;data.hist=data.hist||{};const t=iso(),o={};ks0.forEach(k=>o[k]=[+m[k][0].toFixed(4),+m[k][1].toFixed(3)]);
  if(JSON.stringify(data.hist[t])!==JSON.stringify(o)){data.hist[t]=o;const ks=Object.keys(data.hist).sort();while(ks.length>120)delete data.hist[ks.shift()];LS('wl2_data',data)}}
 function dayChanges(){const t=iso(),ks=Object.keys(data.hist||{}).filter(k=>k<t).sort(),pk=ks[ks.length-1],P=pk?data.hist[pk]:{},m=dayS(),out=[];
- Object.keys(m).forEach(k=>{const[cmp,q]=m[k],rr=data.stocks.find(x=>x.Symbol===k);let prev=null;
+ Object.keys(m).forEach(k=>{const[cmp,q,g,rr]=m[k];let prev=null;
   if(rr&&rr.Prev&&rr.PrevDate&&(Date.now()-new Date(rr.PrevDate))<4*864e5)prev=rr.Prev;else if(P[k])prev=P[k][0];
-  if(prev==null||!cmp)return;out.push({k,q,cmp,prev,d:q*(cmp-prev),p:(cmp-prev)/prev*100})});return{out,pk}}
+  if(prev==null||!cmp)return;out.push({k:k.replace(/^[MG]:/,''),g,q,cmp,prev,d:q*(cmp-prev),p:(cmp-prev)/prev*100})});return{out,pk}}
 function histRows(){const ks=Object.keys(data.hist||{}).sort(),rows=[];
  for(let i=ks.length-1;i>0&&rows.length<7;i--){const a=data.hist[ks[i]],b=data.hist[ks[i-1]];let d=0,v=0,pv=0;
   Object.keys(a).forEach(k=>{v+=a[k][0]*a[k][1];if(b[k]){d+=a[k][1]*(a[k][0]-b[k][0]);pv+=a[k][1]*b[k][0]}});rows.push({date:ks[i],v,d,p:pv?d/pv*100:0})}return rows}
-SUM.daily=()=>{const{out,pk}=dayChanges(),sg=v=>(v>0?'+':'')+inr(v),cl=v=>v>=0?'up':'dn',tot=out.reduce((s,x)=>s+x.d,0),base=out.reduce((s,x)=>s+x.q*x.prev,0),pc=base?tot/base*100:0,all=new Set(data.stocks.map(x=>x.Symbol)).size;
- if(!out.length)return`<p class="mu">No previous prices to compare yet. Tap <b>⟳ Live prices</b> today. Tomorrow's refresh or holdings import will show the day's change here.</p>`;
- const g=[...out].sort((a,b)=>b.d-a.d).filter(x=>x.d>0).slice(0,3),l=[...out].sort((a,b)=>a.d-b.d).filter(x=>x.d<0).slice(0,3),line=x=>`<div class="l" style="margin-bottom:4px"><span>${x.k}</span><span class="${cl(x.d)}">${sg(x.d)} · ${x.p>0?'+':''}${x.p.toFixed(1)}%</span></div>`,hr=histRows();
- return`<div class="mu" style="font-size:10px">STOCKS · LATEST DAY</div><div class="big ${cl(tot)}">${sg(tot)}</div><div class="${cl(tot)}">${pc>0?'+':''}${pc.toFixed(2)}%</div><div class="mu" style="font-size:11px;margin-bottom:10px">${out.length} of ${all} stocks · vs ${pk||'previous close'}</div>`+
- (g.length?`<div class="mu" style="font-size:10px">TOP GAINERS</div>${g.map(line).join('')}`:'')+(l.length?`<div class="mu" style="font-size:10px;margin-top:8px">TOP LOSERS</div>${l.map(line).join('')}`:'')+
- (hr.length?`<div class="mu" style="font-size:10px;margin-top:12px">LAST DAYS</div><table>${hr.map(x=>`<tr><td>${x.date}</td><td>${inr(x.v)}</td><td class="${cl(x.d)}">${sg(x.d)} (${x.p>0?'+':''}${x.p.toFixed(1)}%)</td></tr>`).join('')}</table>`:'')};
+SUM.daily=()=>{const{out,pk}=dayChanges(),sg=v=>(v>0?'+':'')+inr(v),cl=v=>v>=0?'up':'dn',pt=x=>(x>0?'+':'')+x.toFixed(2)+'%';
+ if(!out.length)return`<p class="mu">No previous prices to compare yet. Tap <b>⟳ Live prices</b> today. Tomorrow's refresh or holdings import will show each day's change here.</p>`;
+ const sum=a=>{const d=a.reduce((s,x)=>s+x.d,0),b=a.reduce((s,x)=>s+x.q*x.prev,0);return{d,p:b?d/b*100:0,n:a.length}},T=sum(out),
+ g=[...out].sort((a,b)=>b.d-a.d).filter(x=>x.d>0).slice(0,3),l=[...out].sort((a,b)=>a.d-b.d).filter(x=>x.d<0).slice(0,3),
+ line=x=>`<div class="l" style="margin-bottom:4px"><span>${x.k.length>26?x.k.slice(0,25)+'…':x.k}</span><span class="${cl(x.d)}">${sg(x.d)} · ${pt(x.p)}</span></div>`,hr=histRows();
+ return`<div class="mu" style="font-size:10px">WHOLE PORTFOLIO · LATEST DAY</div><div class="big ${cl(T.d)}">${sg(T.d)}</div><div class="${cl(T.d)}">${pt(T.p)}</div><div class="mu" style="font-size:11px;margin-bottom:10px">${T.n} holdings · vs ${pk||'previous close'}</div>`+
+ ['Stocks','Mutual funds','Gold'].map(G=>{const a=out.filter(x=>x.g===G);if(!a.length)return`<div class="l" style="margin-bottom:4px"><span>${G}</span><span class="mu">no comparison yet</span></div>`;const s=sum(a);return`<div class="l" style="margin-bottom:4px"><span>${G}</span><span class="${cl(s.d)}">${sg(s.d)} · ${pt(s.p)}</span></div>`}).join('')+
+ (g.length?`<div class="mu" style="font-size:10px;margin-top:10px">TOP GAINERS</div>${g.map(line).join('')}`:'')+(l.length?`<div class="mu" style="font-size:10px;margin-top:8px">TOP LOSERS</div>${l.map(line).join('')}`:'')+
+ (hr.length?`<div class="mu" style="font-size:10px;margin-top:12px">LAST DAYS · ALL HOLDINGS</div><table>${hr.map(x=>`<tr><td>${x.date}</td><td>${inr(x.v)}</td><td class="${cl(x.d)}">${sg(x.d)} (${pt(x.p)})</td></tr>`).join('')}</table>`:'')};
 {const _r0=render;render=function(){_r0();try{snap()}catch(e){}}}
 if(!LS('wl2_dd')&&!tabs.some(t=>t.w.some(w=>w.t==='daily'))){tabs[0].w.splice(2,0,{id:Date.now()+1,t:'daily',s:''});LS('wl2_dd',1);save()}
 
