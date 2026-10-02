@@ -122,25 +122,25 @@ const sample=()=>({
  property:[{Name:'Flat, Pune',PurchasePrice:6500000,CurrentValue:9200000,Loan:2800000}],
  cash:[{Account:'HDFC Savings',Balance:240000},{Account:'Emergency FD',Balance:500000}],
  income:[{Source:'Salary',Monthly:220000},{Source:'Rental',Monthly:25000},{Source:'Dividends',Monthly:4000}],
- targets:[{Asset:'MF',TargetPct:30},{Asset:'Stocks',TargetPct:15},{Asset:'Gold',TargetPct:8},{Asset:'PPF',TargetPct:10},{Asset:'Property',TargetPct:30},{Asset:'Cash',TargetPct:7},{Asset:'Net Worth Goal',TargetValue:30000000}]});
+ loans:[{Name:'Car loan',Principal:900000,Outstanding:620000,Rate:9.2,EMI:19500,EMIDay:5}],nwh:[],targets:[{Asset:'MF',TargetPct:30},{Asset:'Stocks',TargetPct:15},{Asset:'Gold',TargetPct:8},{Asset:'PPF',TargetPct:10},{Asset:'Property',TargetPct:30},{Asset:'Cash',TargetPct:7},{Asset:'Net Worth Goal',TargetValue:30000000}]});
 let data=LS('wl2_data')||sample();
-const KEYS=['mf','stocks','gold','ppf','property','cash','income','targets'];
+const KEYS=['mf','stocks','gold','ppf','property','cash','income','targets','loans','nwh'];
 // ---- calculations ----
 function calc(){const d=data,C={MF:[0,0],Stocks:[0,0],Gold:[0,0],PPF:[0,0],Property:[0,0],Cash:[0,0]},add=(k,v,i)=>{C[k][0]+=v;C[k][1]+=i};
  d.mf.forEach(r=>add('MF',n(r.Units)*n(r.NAV),n(r.Units)*n(r.AvgNAV)));
  d.stocks.forEach(r=>add('Stocks',n(r.Qty)*n(r.CMP),n(r.Qty)*n(r.AvgPrice)));
  d.gold.filter(r=>r.Qty).forEach(r=>add('Gold',n(r.Qty)*n(r.CMP),n(r.Qty)*n(r.AvgPrice)));
- d.ppf.forEach(r=>add('PPF',n(r.Balance),n(r.Balance)));
+ d.ppf.forEach(r=>add('PPF',n(r.Balance)+n(r.Accrued)+n(r.Pending),n(r.Balance)));
  d.property.forEach(r=>add('Property',n(r.CurrentValue),n(r.PurchasePrice)));
  d.cash.forEach(r=>add('Cash',n(r.Balance),n(r.Balance)));
- const sum=(a,f)=>a.reduce((t,r)=>t+n(f(r)),0),gross=Object.values(C).reduce((t,c)=>t+c[0],0),inv=Object.values(C).reduce((t,c)=>t+c[1],0),loans=sum(d.property,r=>r.Loan);
- return{C,gross,inv,loans,net:gross-loans,income:sum(d.income,r=>r.Monthly),sip:sum(d.mf,r=>r.SIP),ppfM:sum(d.ppf,r=>r.YearlyDeposit)/12}}
+ const sum=(a,f)=>a.reduce((t,r)=>t+n(f(r)),0),gross=Object.values(C).reduce((t,c)=>t+c[0],0),inv=Object.values(C).reduce((t,c)=>t+c[1],0),loans=sum(d.property,r=>r.Loan)+sum(d.loans||[],r=>r.Outstanding);
+ return{C,gross,inv,loans,net:gross-loans,income:sum(d.income,r=>r.Monthly),sip:sum(d.mf,r=>r.SIP),ppfM:sum(d.ppf,r=>n(r.MonthlyDeposit)||n(r.YearlyDeposit)/12)}}
 // ---- table widgets ----
 const TB={
- mf:['Mutual Funds & SIPs','mf',[['Fund',r=>`<b>${r.Fund}</b><br><span class="mu">${[r.Category,r.Account].filter(Boolean).join(' · ')}</span><br><span class="mu" style="font-size:11px">NAV ₹${n(r.NAV).toFixed(2)}${r.NavDate?' · '+r.NavDate:''} · ${r.Matched?'AMFI: '+r.Matched:'from statement'}</span>`],['Value',r=>inr(r.Units*r.NAV)],['P&L',r=>pl(r.Units*r.NAV,r.Units*r.AvgNAV)],['SIP',r=>r.SIP?inr(r.SIP)+'/mo':'—']],r=>r.Units*r.NAV],
+ mf:['Mutual Funds & SIPs','mf',[['Fund',r=>`<b>${r.Fund}</b><br><span class="mu">${[r.Category,r.Account].filter(Boolean).join(' · ')}</span><br><span class="mu" style="font-size:11px">NAV ₹${n(r.NAV).toFixed(2)}${r.NavDate?' · '+r.NavDate:''} · ${r.Matched?'AMFI: '+r.Matched:'from statement'}</span>`],['Value',r=>inr(r.Units*r.NAV)],['P&L',r=>pl(r.Units*r.NAV,r.Units*r.AvgNAV)],['SIP',r=>r.SIP?inr(r.SIP)+'/mo<br><span class="mu" style="font-size:11px">day '+(r.SIPDay||5)+'</span>':'—']],r=>r.Units*r.NAV],
  stocks:['Stocks','stocks',[['Stock',r=>`<b>${r.Symbol}</b><br><span class="mu">${[r.Name,r.Account].filter(Boolean).join(' · ')}</span>`],['Qty',r=>n(r.Qty)],['Value',r=>inr(r.Qty*r.CMP)],['P&L',r=>pl(r.CMP,r.AvgPrice)]],r=>r.Qty*r.CMP],
  gold:['Gold','gold',[['Type',r=>`<b>${r.Type||r.Symbol}</b>${r.Qty?`<br><span class="mu">${r.Qty} units${r.Account?' · '+r.Account:''}</span>`:''}`],['Price',r=>'₹'+n(r.CMP).toLocaleString('en-IN')],['Value',r=>inr(r.Qty?r.Qty*r.CMP:r.Grams*r.RatePerGram)],['P&L',r=>r.Qty?pl(r.CMP,r.AvgPrice):pl(r.RatePerGram,r.AvgPrice)]],r=>r.Qty?r.Qty*r.CMP:r.Grams*r.RatePerGram],
- ppf:['PPF','ppf',[['Account',r=>`<b>${r.Account}</b>`],['Balance',r=>inr(r.Balance)],['Rate',r=>n(r.Rate)+'%'],['Matures',r=>r.Maturity||'—']],r=>r.Balance],
+ ppf:['PPF','ppf',[['Account',r=>`<b>${r.Account}</b>${r.MonthlyDeposit?`<br><span class="mu" style="font-size:11px">${inr(r.MonthlyDeposit)}/mo · day ${r.DepositDay||5}</span>`:''}`],['Balance',r=>inr(r.Balance)],['Interest',r=>n(r.Pending)?`<span class="up">${inr(n(r.Pending)+n(r.Accrued))}</span><br><span class="mu" style="font-size:11px">tap to add</span>`:inr(r.Accrued)],['Rate',r=>n(r.Rate)+'%']],r=>n(r.Balance)+n(r.Accrued)+n(r.Pending)],
  property:['Property','property',[['Property',r=>`<b>${r.Name}</b>`],['Value',r=>inr(r.CurrentValue)],['Loan',r=>inr(r.Loan)],['Gain',r=>pl(r.CurrentValue,r.PurchasePrice)]],r=>r.CurrentValue-n(r.Loan)],
  cash:['Cash','cash',[['Account',r=>`<b>${r.Account}</b>`],['Balance',r=>inr(r.Balance)]],r=>r.Balance]};
 const table=t=>{const[,k,cols,tv]=TB[t],rows=data[k];if(!rows.length)return`<p class="mu">No ${k} yet. <a onclick="ed('${k}',-1)" style="color:var(--ac);cursor:pointer">+ Add</a></p>`;
@@ -189,7 +189,7 @@ $('#f').onchange=async e=>{const file=e.target.files[0];if(!file)return;if(isX(e
   KEYS.forEach(k=>{const s=wb.SheetNames.find(x=>x.toLowerCase().replace(/[^a-z]/g,'').startsWith(k.slice(0,k==='mf'?2:4)));d[k]=s?XLSX.utils.sheet_to_json(wb.Sheets[s]):[];if(s)found++});
   if(!found){alert('No matching sheets. Use the Template button for the expected format.');return}
   data=d;save();render()}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
-$('#tpl').onclick=()=>{const wb=XLSX.utils.book_new(),d=sample(),nm={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets'};
+$('#tpl').onclick=()=>{const wb=XLSX.utils.book_new(),d=sample(),nm={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets',loans:'Loans',nwh:'NetWorthHistory'};
  KEYS.forEach(k=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(d[k]),nm[k]));
  try{XLSX.writeFile(wb,'wealthlab_portfolio_template.xlsx')}catch(e){alert('Download is blocked in this view; open the published link in a browser.')}};
 // ---- Zerodha Console holdings import (Stocks + Coin MF statements, xlsx/csv) ----
@@ -240,12 +240,12 @@ $('#rf').onclick=async()=>{st('Refreshing…');let ok=0,bad=[];
  save();render();
  st(!ok&&bad.length?'Blocked by browser/network — open the file locally or set a proxy (⚙)':`Updated ${ok}${bad.length?` · failed: ${bad.slice(0,3).join(', ')}${bad.length>3?'…':''}`:''} · ${new Date().toLocaleTimeString()}`)};
 // ---- Excel export ----
-$('#exp').onclick=()=>{const nm={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets'},wb=XLSX.utils.book_new();
+$('#exp').onclick=()=>{const nm={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets',loans:'Loans',nwh:'NetWorthHistory'},wb=XLSX.utils.book_new();
  KEYS.forEach(k=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data[k]||[]),nm[k]));
  try{XLSX.writeFile(wb,'wealthlab_portfolio.xlsx')}catch(e){alert('Download blocked in this view; open the file in a browser.')}};
 const csvParse=t=>{const R=[];let r=[],c='',q=false;t=t.replace(/^\uFEFF/,'');const l1=t.split(/\r?\n/)[0],dl=(l1.match(/\t/g)||[]).length>(l1.match(/,/g)||[]).length?'\t':',';for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else if(ch==='"')q=true;else if(ch===dl){r.push(c);c=''}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);R.push(r);r=[];c=''}else c+=ch}if(c||r.length){r.push(c);R.push(r)}return R};
 const csvCell=v=>{v=v==null?'':String(v);return/[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-const NM={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets'},TXT=new Set(['Ticker','Fund','Category','Symbol','Name','Type','Account','Source','Asset','Maturity','ISIN','Matched','SchemeCode','NavDate']);
+const NM={mf:'MF',stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',income:'Income',targets:'Targets',loans:'Loans',nwh:'NetWorthHistory'},TXT=new Set(['Ticker','Fund','Category','Symbol','Name','Type','Account','Source','Asset','Maturity','ISIN','Matched','SchemeCode','NavDate']);
 const toCsv=d=>KEYS.map(k=>{const rows=d[k]||[],cols=[...new Set(rows.flatMap(Object.keys))];return['#'+NM[k],cols.map(csvCell).join(','),...rows.map(r=>cols.map(c=>csvCell(r[c])).join(','))].join('\n')}).join('\n\n')+'\n';
 const fromCsv=t=>{const rows=csvParse(t);if(!rows.some(r=>String(r[0]).startsWith('#')))return null;const d={};KEYS.forEach(k=>d[k]=[]);let key=null,hdr=null;
  for(const row of rows){const a=String(row[0]??'');if(a.startsWith('#')){key=KEYS.find(k=>NM[k].toLowerCase()===a.slice(1).trim().toLowerCase())||null;hdr=null;continue}
@@ -258,7 +258,7 @@ viaX=async(e,old)=>{try{await loadX()}catch(_){alert('Reading .xlsx needs an int
 const saveText=async(text,fn)=>{const f=new File([text],fn,{type:'text/csv'});try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}}catch(e){if(e.name==='AbortError')return}const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=fn;a.click()};
 $('#tpl').onclick=()=>saveText(toCsv(sample()),'wealthlab_template.csv');
 $('#exp').onclick=()=>saveText(toCsv(data),'wealthlab_portfolio.csv');
-$('#f').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=fromCsv(await file.text());if(!d){alert('Not a WealthLab CSV. Use Template for the format, or Zerodha import for holdings files.')}else{d.hist=data.hist;data=d;save();render();st('Imported')}}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
+$('#f').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const d=fromCsv(await file.text());if(!d){alert('Not a WealthLab CSV. Use Template for the format, or Zerodha import for holdings files.')}else{d.hist=data.hist;d.meta=data.meta;['loans','nwh'].forEach(k=>{if(!d[k]||!d[k].length)d[k]=data[k]||[]});data=d;save();render();st('Imported')}}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
 $('#z').onchange=async e=>{let mf=[],stk=[],gld=[];if(isX(e))return viaX(e,oldZ);try{for(const file of e.target.files){const p=parseHoldings(csvParse(await file.text()));if(p){mf=mf.concat(p.mf);stk=stk.concat(p.stocks);gld=gld.concat(p.gold)}}
  if(!mf.length&&!stk.length&&!gld.length){alert('No holdings table found. Use a Zerodha Console holdings file saved as CSV, with a Symbol or Instrument column.');return}
  const keep=(old,key,r)=>{const o=old.find(x=>x[key]===r[key]);return o?{...o,...r,SIP:o.SIP,Category:o.Category,Name:o.Name||r.Name,SchemeCode:o.SchemeCode}:r};
@@ -273,10 +273,10 @@ window.ed=(key,i)=>{const row=i<0?{}:data[key][i];cur={key,i};
  const ks=key==='gold'?['Type','Symbol','Qty','AvgPrice','CMP','Account']:[...new Set([...FIELDS[key],...Object.keys(row).filter(k=>!HID.includes(k))])];
  $('#edt').textContent=(i<0?'Add ':'Edit ')+key;
  $('#edf').innerHTML=ks.map(k=>`<div class="mu" style="font-size:11px">${k}</div><input data-k="${k}" inputmode="${TXT.has(k)?'text':'decimal'}" value="${String(row[k]??'').replace(/"/g,'&quot;')}" style="width:100%;padding:8px;margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit">`).join('');
- if(key==='mf')$('#edf').insertAdjacentHTML('beforeend',`<div class="mu" style="font-size:11px;margin-top:6px">NAV source</div><div style="margin-bottom:6px">${row.Matched?row.Matched+(row.NavDate?' · '+row.NavDate:''):'Not matched yet (using statement NAV)'}</div><button class="btn" onclick="pickScheme()">Change NAV scheme…</button>`);$('#edd').textContent='Delete';delete $('#edd').dataset.sure;$('#edd').style.display=i<0?'none':'block';$('#edlg').showModal()};
+ if(key==='ppf'&&row.Account)$('#edf').insertAdjacentHTML('beforeend',`<div class="mu" style="font-size:11px;margin-top:6px">Interest</div><div style="margin-bottom:6px">Accrued this year ${inr(row.Accrued||0)}${n(row.Pending)?' · ready to credit '+inr(row.Pending):''}</div><button class="btn" onclick="ppfCredit()">Add interest to principal</button>`);if(key==='mf')$('#edf').insertAdjacentHTML('beforeend',`<div class="mu" style="font-size:11px;margin-top:6px">NAV source</div><div style="margin-bottom:6px">${row.Matched?row.Matched+(row.NavDate?' · '+row.NavDate:''):'Not matched yet (using statement NAV)'}</div><button class="btn" onclick="pickScheme()">Change NAV scheme…</button>`);$('#edd').textContent='Delete';delete $('#edd').dataset.sure;$('#edd').style.display=i<0?'none':'block';$('#edlg').showModal()};
 $('#eds').onclick=()=>{const{key,i}=cur,o=i<0?{}:{...data[key][i]};
  document.querySelectorAll('#edf input').forEach(x=>{const k=x.dataset.k,v=x.value.trim(),c=v.replace(/,/g,'');if(v==='')delete o[k];else o[k]=(!TXT.has(k)&&/^-?\d*\.?\d+$/.test(c))?+c:v});
- if(i<0){if(!Object.keys(o).length){$('#edlg').close();return}data[key].push(o)}else data[key][i]=o;
+ if(key==='cash')o.Updated=iso();if(i<0){if(!Object.keys(o).length){$('#edlg').close();return}data[key].push(o)}else data[key][i]=o;
  save();render();$('#edlg').close()};
 $('#edd').onclick=()=>{const b=$('#edd');if(!b.dataset.sure){b.dataset.sure=1;b.textContent='Tap again to delete';return}delete b.dataset.sure;b.textContent='Delete';data[cur.key].splice(cur.i,1);save();render();$('#edlg').close()};
 window.edT=k=>{let i=data.targets.findIndex(x=>String(x.Asset).toLowerCase()===k.toLowerCase());if(i<0){data.targets.push({Asset:k});i=data.targets.length-1}ed('targets',i)};
@@ -292,10 +292,10 @@ $('#z').onchange=async e=>{let t=[0,0,0];
   const dupOf=[['stocks',p.stocks,'Symbol','Qty'],['mf',p.mf,'Fund','Units'],['gold',p.gold,'Symbol','Qty']].map(([key,rows,k,q])=>rows.length?same(key,rows,k,q,acc):null).find(Boolean);
   if(dupOf){const c=await modal({text:'These holdings are identical to account "'+dupOf+'", which is already imported. Importing them again would double your portfolio.',buttons:[['Replace "'+dupOf+'"','replace','p'],['Keep both (different accounts)','both'],['Skip this file',null]]});if(c===null)continue;if(c==='replace')acc=dupOf}
   const put=(key,rows,k)=>{const etf=o=>key!=='gold'||o.Qty,old=data[key],prev=old.filter(o=>etf(o)&&o.Account===acc);
-   data[key]=old.filter(o=>!etf(o)||(o.Account&&o.Account!==acc)).concat(rows.map(r=>{const o=prev.find(x=>x[k]===r[k]);return{...(o||{}),...r,Account:acc,SIP:o?.SIP??r.SIP,Category:o?.Category??r.Category,Name:o?.Name||r.Name,SchemeCode:o?.SchemeCode,NavDate:undefined}}))};
+   data[key]=old.filter(o=>!etf(o)||(o.Account&&o.Account!==acc)).concat(rows.map(r=>{const o=prev.find(x=>x[k]===r[k]);if(o&&o.SIPAdd>0)(window.__rc=window.__rc||[]).push([r.Fund,o.Units,r.Units]);return{...(o||{}),...r,Account:acc,SIPAdd:0,SIPLast:(o&&o.SIP)?lastDueYm(o.SIPDay||5):o?.SIPLast,SIP:o?.SIP??r.SIP,Category:o?.Category??r.Category,Name:o?.Name||r.Name,SchemeCode:o?.SchemeCode,NavDate:undefined}}))};
   if(p.stocks.length)put('stocks',p.stocks,'Symbol');if(p.mf.length)put('mf',p.mf,'Fund');if(p.gold.length)put('gold',p.gold,'Symbol');
   t[0]+=p.stocks.length;t[1]+=p.mf.length;t[2]+=p.gold.length}
-  save();render();st(`Imported ${t[0]} stocks, ${t[1]} funds, ${t[2]} gold ETFs`)}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
+  data.meta=data.meta||{};data.meta.lastImport=iso();if(window.__rc&&window.__rc.length){const rc=window.__rc;window.__rc=[];await modal({text:'Matched with your statement. SIP projection vs statement units:\n'+rc.map(x=>String(x[0]).slice(0,30)+': '+x[1].toFixed(3)+' → '+x[2].toFixed(3)).join('\n'),buttons:[['OK',true,'p']]})}save();render();st(`Imported ${t[0]} stocks, ${t[1]} funds, ${t[2]} gold ETFs`)}catch(err){alert('Could not read file: '+err.message)}e.target.value=''};
 // ---- Settings tab: target allocation ----
 TYPES.settings='Allocation Settings';
 const IS='padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;',
@@ -457,6 +457,57 @@ if(!LS('wl2_m1')){const ov=tabs.find(t=>t.name==='Overview')||tabs[0];let as=tab
  const mv=ov.w.filter(w=>w.t==='mf'||w.t==='stocks');ov.w=ov.w.filter(w=>w.t!=='mf'&&w.t!=='stocks');mv.reverse().forEach(w=>{if(!as.w.some(x=>x.t===w.t))as.w.unshift({...w,s:'s6'})});
  if(!ov.w.some(w=>w.t==='invest'))ov.w.splice(1,0,{id:Date.now()+11,t:'invest',s:''});if(!ov.w.some(w=>w.t==='acct'))ov.w.splice(3,0,{id:Date.now()+12,t:'acct',s:'s6'});
  LS('wl2_m1',1);save()}
+
+// ---- monthly tracking: PPF deposits+interest, SIP auto-units, car loan EMI, net worth history ----
+data.loans=data.loans||[];data.nwh=data.nwh||[];data.meta=data.meta||{};
+['Month','Date','Name','Maturity'].forEach(k=>TXT.add(k));HID.push('SIPLast','SIPAdd','LastApplied','Accrued','Pending','LoanLast','InterestPaid','Updated','Date');
+FIELDS.mf=['Fund','Category','Units','AvgNAV','NAV','SIP','SIPDay','Account'];FIELDS.ppf=['Account','Balance','Rate','MonthlyDeposit','DepositDay','Maturity'];
+FIELDS.loans=['Name','Principal','Outstanding','Rate','EMI','EMIDay'];FIELDS.nwh=['Month','Net','Investments','Property','Cash','Loans'];
+function iso(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+const YM=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),r2=v=>Math.round(v*100)/100;
+function lastDueYm(day){const t=new Date(),d=Math.min(+day||1,28);return t.getDate()>=d?YM(t):YM(new Date(t.getFullYear(),t.getMonth()-1,1))}
+function dueAfter(last,day){const out=[],end=lastDueYm(day);let[y,m]=last.split('-').map(Number);for(let k=0;k<600;k++){m++;if(m>12){m=1;y++}const ym=y+'-'+String(m).padStart(2,'0');if(ym>end)break;out.push(ym)}return out}
+function applyRecurring(){let ch=false;
+ data.mf.forEach(r=>{if(!(n(r.SIP)>0))return;const day=r.SIPDay||5;if(!r.SIPLast){r.SIPLast=lastDueYm(day);ch=true;return}
+  dueAfter(r.SIPLast,day).forEach(ym=>{const nav=n(r.NAV);if(nav>0){const u=n(r.SIP)/nav;r.AvgNAV=(n(r.Units)*n(r.AvgNAV)+n(r.SIP))/(n(r.Units)+u);r.Units=+(n(r.Units)+u).toFixed(3);r.SIPAdd=+(n(r.SIPAdd)+u).toFixed(3)}r.SIPLast=ym;ch=true})});
+ data.ppf.forEach(r=>{if(!(n(r.MonthlyDeposit)>0||n(r.Rate)>0))return;const day=r.DepositDay||5;if(!r.LastApplied){r.LastApplied=lastDueYm(day);ch=true;return}
+  dueAfter(r.LastApplied,day).forEach(ym=>{if(ym.slice(5)==='04'&&n(r.Accrued)>0){r.Pending=r2(n(r.Pending)+n(r.Accrued));r.Accrued=0}
+   const dep=n(r.MonthlyDeposit),by5=day<=5;r.Balance=r2(n(r.Balance)+dep);r.Accrued=r2(n(r.Accrued)+(n(r.Balance)-(by5?0:dep))*n(r.Rate)/1200);r.LastApplied=ym;ch=true})});
+ data.loans.forEach(r=>{if(!(n(r.EMI)>0&&n(r.Outstanding)>0))return;const day=r.EMIDay||5;if(!r.LoanLast){r.LoanLast=lastDueYm(day);ch=true;return}
+  dueAfter(r.LoanLast,day).forEach(ym=>{const o=n(r.Outstanding),it=o*n(r.Rate)/1200,pr=Math.min(o,Math.max(0,n(r.EMI)-it));r.Outstanding=r2(o-pr);r.InterestPaid=r2(n(r.InterestPaid)+it);r.LoanLast=ym;ch=true})});
+ if(ch)save()}
+window.ppfCredit=()=>{const r=data.ppf[cur.i];if(!r)return;r.Balance=r2(n(r.Balance)+n(r.Pending)+n(r.Accrued));r.Pending=0;r.Accrued=0;save();$('#edlg').close();render();st('Interest added to principal')};
+// loan widget
+TYPES.loan='Loans / EMI';
+SUM.loan=()=>{const L=data.loans||[];if(!L.length)return`<p class="mu">Add your car loan to track the EMI and payoff date.</p><button class="btn" onclick="ed('loans',-1)">+ Add loan</button>`;
+ return L.map((r,i)=>{const out=n(r.Outstanding),P=n(r.Principal)||out,rt=n(r.Rate)/1200,emi=n(r.EMI),day=Math.min(+r.EMIDay||5,28);let m=0,o=out,it=0;
+  while(o>0.5&&m<600&&emi>0){const x=o*rt;if(emi<=x){m=999;break}it+=x;o-=emi-x;m++}
+  const t=new Date(),add=t.getDate()>day?1:0,nx=new Date(t.getFullYear(),t.getMonth()+add,day),end=new Date(t.getFullYear(),t.getMonth()+add+Math.max(m-1,0),day),paid=P?Math.max(0,Math.min(100,(P-out)/P*100)):0,ok=emi&&m<999;
+  return`<div class="row" onclick="ed('loans',${i})" style="cursor:pointer"><div class="mu" style="font-size:10px">${String(r.Name||'LOAN').toUpperCase()}</div><div class="big dn">${inr(out)}</div><div class="trk"><i style="width:${paid}%"></i></div><div class="mu" style="margin-bottom:8px">${paid.toFixed(0)}% repaid of ${inr(P)}</div>
+  <div class="kv"><div><small>EMI</small><b>${inr(emi)}</b></div><div><small>NEXT EMI</small><b>${nx.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</b></div><div><small>PAYOFF</small><b>${ok?end.toLocaleDateString('en-IN',{month:'short',year:'numeric'}):'—'}</b></div></div>
+  <div class="mu" style="font-size:11px;margin-top:6px">${ok?m+' EMIs left · about '+inr(it)+' interest still to pay':'Check EMI and rate'}${n(r.InterestPaid)?' · '+inr(r.InterestPaid)+' interest paid since tracking':''}</div></div>`}).join('')+`<div class="mu" onclick="ed('loans',-1)" style="cursor:pointer;color:var(--ac)">+ Add loan</div>`};
+// net worth history
+TYPES.nw='Net Worth History';const SNAPDAY=2;
+function takeSnap(){const c=calc(),ym=YM(new Date()),R=Math.round,r={Month:ym,Date:iso(),Net:R(c.net),Investments:R(c.gross-c.C.Property[0]),Property:R(c.C.Property[0]),Cash:R(c.C.Cash[0]),Loans:R(c.loans),MF:R(c.C.MF[0]),Stocks:R(c.C.Stocks[0]),Gold:R(c.C.Gold[0]),PPF:R(c.C.PPF[0])},i=data.nwh.findIndex(x=>x.Month===ym);
+ if(i>=0)data.nwh[i]=r;else data.nwh.push(r);data.nwh.sort((a,b)=>a.Month>b.Month?1:-1);data.meta.nwOn=1;save()}
+function autoSnap(){if(data.meta&&data.meta.nwOn&&new Date().getDate()>=SNAPDAY&&!data.nwh.some(x=>x.Month===YM(new Date())))takeSnap()}
+window.snapNow=()=>{takeSnap();render();st('Snapshot saved for '+YM(new Date()))};
+window.addPast=async()=>{const m=await ask('Month (YYYY-MM), for example 2026-09','');if(!m||!/^\d{4}-\d{2}$/.test(m))return;const v=await ask('Net worth for '+m+' (₹)','');const x=+String(v||'').replace(/,/g,'');if(!x)return;
+ data.nwh=data.nwh.filter(r=>r.Month!==m);data.nwh.push({Month:m,Net:x});data.nwh.sort((a,b)=>a.Month>b.Month?1:-1);data.meta.nwOn=1;save();render()};
+window.pickCash=async()=>{const rows=data.cash;if(rows.length<2){ed('cash',rows.length?0:-1);return}const c=await modal({text:'Which cash account?',buttons:[...rows.map((r,i)=>[(r.Account||'Cash')+' · '+inr(r.Balance),i,'']),['Cancel',null]]});if(c!==null)ed('cash',c)};
+SUM.nw=()=>{const R=data.nwh,ym=YM(new Date()),mm=data.meta||{},MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],lab=m=>MN[+m.slice(5)-1]+' '+m.slice(2,4);
+ const cashOk=data.cash.some(r=>r.Updated&&r.Updated.slice(0,7)===ym),impOk=(mm.lastImport||'').slice(0,7)===ym,snapOk=R.some(r=>r.Month===ym),
+ chk=(ok,t,b)=>`<div class="l" style="margin-bottom:4px"><span>${ok?'✅':'⬜'} ${t}</span>${b?`<a onclick="${b[1]}" style="color:var(--ac);cursor:pointer">${b[0]}</a>`:''}</div>`;
+ let h='';
+ if(R.length>=2){const P=R.slice(-12),vs=P.map(x=>x.Net),mn=Math.min(...vs),mx=Math.max(...vs),W=320,H=140,px=i=>20+i*(W-40)/Math.max(P.length-1,1),py=v=>15+(mx-v)/((mx-mn)||1)*(H-45),pts=P.map((x,i)=>px(i)+','+py(x.Net)).join(' ');
+  h+=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-height:0;display:block"><polyline points="${pts}" fill="none" style="stroke:var(--ac)" stroke-width="2.5"/>${P.map((x,i)=>`<circle cx="${px(i)}" cy="${py(x.Net)}" r="3.5" style="fill:var(--ac)"/><text x="${px(i)}" y="${H-6}" text-anchor="middle" font-size="9" style="fill:var(--mu)">${P.length>8&&i%2?'':lab(x.Month)}</text>`).join('')}<text x="${px(0)}" y="${py(P[0].Net)-8}" font-size="9" text-anchor="start" style="fill:var(--tx)">${inr(P[0].Net)}</text><text x="${px(P.length-1)}" y="${py(P[P.length-1].Net)-8}" font-size="9" text-anchor="end" style="fill:var(--tx)">${inr(P[P.length-1].Net)}</text></svg>`}
+ else h+=`<p class="mu">${R.length?'Your chart appears after the second month’s snapshot.':'Record your first snapshot to start tracking.'}</p>`;
+ if(R.length){const rows=R.map((x,i)=>({x,i,p:R[i-1]})).slice(-6).reverse();h+=`<table><tr><th>MONTH</th><th>NET WORTH</th><th>CHANGE</th></tr>${rows.map(({x,i,p})=>{const d=p?x.Net-p.Net:null;return`<tr onclick="ed('nwh',${i})" style="cursor:pointer"><td>${lab(x.Month)}</td><td><b>${inr(x.Net)}</b></td><td class="${d==null?'mu':d>=0?'up':'dn'}">${d==null?'—':(d>=0?'+':'')+inr(d)+' ('+(d>=0?'+':'')+(p.Net?d/p.Net*100:0).toFixed(1)+'%)'}</td></tr>`}).join('')}</table>`}
+ h+=`<div class="mu" style="font-size:10px;margin-top:12px">THIS MONTH’S CHECKLIST (${lab(ym)})</div>`+chk(cashOk,'Cash balances updated',['Update','pickCash()'])+chk(impOk,'Statements imported')+chk(snapOk,'Snapshot recorded',[snapOk?'Update':'Record','snapNow()'])+
+  `<div class="mu" style="font-size:11px;margin:6px 0">${mm.nwOn?`Recorded automatically the first time you open the app on or after the ${SNAPDAY}nd of each month.`:`After your first snapshot, one is recorded automatically each month on or after the ${SNAPDAY}nd.`}</div><a onclick="addPast()" style="color:var(--ac);cursor:pointer">+ Add a past month</a>`;
+ return h};
+{const _r1=render;render=function(){try{applyRecurring();autoSnap()}catch(e){console.error(e)}_r1()}}
+if(!LS('wl2_m2')){const ov=tabs.find(t=>t.name==='Overview')||tabs[0];if(!ov.w.some(w=>w.t==='nw'))ov.w.splice(1,0,{id:Date.now()+21,t:'nw',s:'s8'});if(!ov.w.some(w=>w.t==='loan'))ov.w.push({id:Date.now()+22,t:'loan',s:''});LS('wl2_m2',1);save()}
 
 render();
 </script><script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js').catch(function(){});</script>
