@@ -152,9 +152,9 @@ const SUM={
   return`<div class="mu" style="font-size:10px">NET WORTH · <a onclick="edG()" style="color:var(--ac);cursor:pointer">goal</a></div><div class="big">${inr(c.net)}</div>
   ${g?`<div class="trk"><i style="width:${Math.min(100,c.net/g*100)}%"></i></div><div class="mu">${(c.net/g*100).toFixed(0)}% of ${inr(g)} goal</div>`:''}
   <div class="kv"><div><small>ASSETS</small><b>${inr(c.gross)}</b></div><div><small>LOANS</small><b class="dn">${inr(c.loans)}</b></div><div><small>GAIN</small><b class="${gain>=0?'up':'dn'}">${inr(gain)}</b></div></div>`},
- alloc(){const c=calc();return Object.keys(LBL).map(k=>{const cur=c.gross?c.C[k][0]/c.gross*100:0,t=(data.targets.find(x=>String(x.Asset).toLowerCase()===k.toLowerCase())||{}).TargetPct,diff=t==null?0:(t-cur)/100*c.gross;
+ alloc(){const c=calc(),B=c.gross-c.C.Property[0];return ALLOC.map(k=>{const cur=B?c.C[k][0]/B*100:0,t=(data.targets.find(x=>String(x.Asset).toLowerCase()===k.toLowerCase())||{}).TargetPct,diff=t==null?0:(t-cur)/100*B;
   return`<div class="row" onclick="edT('${k}')" style="cursor:pointer"><div class="l"><span>${LBL[k]} · <b>${inr(c.C[k][0])}</b></span><span><b>${cur.toFixed(1)}%</b> <span class="mu">/ ${t==null?'—':t+'%'}</span></span></div><div class="trk"><i style="width:${cur}%"></i>${t==null?'':`<u style="left:${t}%"></u>`}</div>
-  ${t==null?'':`<div class="mu" style="font-size:11px">${Math.abs(diff)<c.gross*.005?'On target':(diff>0?'Add ':'Trim ')+inr(Math.abs(diff))}</div>`}</div>`}).join('')},
+  ${t==null?'':`<div class="mu" style="font-size:11px">${Math.abs(diff)<B*.005?'On target':(diff>0?'Add ':'Trim ')+inr(Math.abs(diff))}</div>`}</div>`}).join('')},
  flow(){const c=calc(),inv=c.sip+c.ppfM,sv=c.income?inv/c.income*100:0;
   return`<div class="mu" style="font-size:10px">MONTHLY INCOME</div><div class="big">${inr(c.income)}</div>
   ${data.income.map((r,i)=>`<div class="row" onclick="ed('income',${i})" style="margin:0;cursor:pointer"><div class="l"><span>${r.Source}</span><b>${inr(r.Monthly)}</b></div></div>`).join('')}
@@ -163,7 +163,7 @@ const SUM={
 const TYPES={net:'Net Worth',alloc:'Allocation vs Target',flow:'Income & SIPs',mf:TB.mf[0],stocks:'Stocks',gold:'Gold',ppf:'PPF',property:'Property',cash:'Cash',notes:'Notes'};
 window.setNote=(id,v)=>{tabs[act].w.find(w=>w.id===id).n=v;save()};
 // ---- layout ----
-const defTabs=()=>[{name:'Overview',w:[{id:1,t:'net',s:''},{id:2,t:'alloc',s:''},{id:3,t:'flow',s:''},{id:4,t:'mf',s:'s6'},{id:5,t:'stocks',s:'s6'}]},{name:'Assets',w:[{id:6,t:'gold',s:''},{id:7,t:'ppf',s:''},{id:8,t:'property',s:''},{id:9,t:'cash',s:''}]}];
+const defTabs=()=>[{name:'Overview',w:[{id:1,t:'net',s:''},{id:2,t:'alloc',s:''},{id:3,t:'flow',s:''}]},{name:'Assets',w:[{id:4,t:'mf',s:'s6'},{id:5,t:'stocks',s:'s6'},{id:6,t:'gold',s:''},{id:7,t:'ppf',s:''},{id:8,t:'property',s:''},{id:9,t:'cash',s:''}]}];
 let tabs=LS('wl2_tabs')||defTabs(),act=0,drag=null;
 const save=()=>{LS('wl2_tabs',tabs);LS('wl2_data',data)};
 function render(){data.gold=(data.gold||[]).filter(r=>r.Qty);
@@ -301,13 +301,13 @@ TYPES.settings='Allocation Settings';
 const IS='padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;',
 tgFind=k=>data.targets.find(x=>String(x.Asset).toLowerCase()===k.toLowerCase()),
 sumHtml=t=>{const ok=Math.abs(t-100)<.05;return`Total <b class="${ok?'up':'dn'}">${+t.toFixed(1)}%</b>${ok?'':' — should be 100%'}`};
-SUM.settings=()=>{const c=calc(),goal=(data.targets.find(x=>/goal|net/i.test(x.Asset))||{}).TargetValue,ks=Object.keys(LBL),tot=ks.reduce((s,k)=>s+n((tgFind(k)||{}).TargetPct),0);
- return`<div class="mu" style="margin-bottom:10px">Target share of your total assets. Set each one, then Save.</div>`+ks.map(k=>{const cur=c.gross?c.C[k][0]/c.gross*100:0;
+SUM.settings=()=>{const c=calc(),goal=(data.targets.find(x=>/goal|net/i.test(x.Asset))||{}).TargetValue,ks=ALLOC,tot=ks.reduce((s,k)=>s+n((tgFind(k)||{}).TargetPct),0);
+ return`<div class="mu" style="margin-bottom:10px">Target share of your investments (property is excluded). Set each one, then Save.</div>`+ks.map(k=>{const B=c.gross-c.C.Property[0],cur=B?c.C[k][0]/B*100:0;
   return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="flex:1">${LBL[k]}<br><span class="mu" style="font-size:11px">now ${cur.toFixed(1)}% · ${inr(c.C[k][0])}</span></span><input class="tg" data-k="${k}" type="number" inputmode="decimal" step="0.5" min="0" value="${(tgFind(k)||{}).TargetPct??''}" oninput="tgSum()" style="width:80px;${IS}"> %</div>`}).join('')+
  `<div id="tgs" style="margin:6px 0 12px">${sumHtml(tot)}</div><div class="mu" style="font-size:11px">Net worth goal (₹)</div><input id="tgg" type="number" inputmode="decimal" value="${goal??''}" style="width:100%;${IS}">
  <div style="display:flex;gap:8px;margin-top:12px"><button class="btn p" onclick="tgSave()" style="flex:1;text-align:center">Save</button><button class="btn" onclick="tgMix()" style="flex:1;text-align:center">Use my current mix</button></div><div class="mu" style="margin-top:16px;font-size:11px">Data tools</div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn" onclick="rstData(this)" style="flex:1;text-align:center;color:var(--dn)">Reset to sample data</button>${LS('wl2_bak')?'<button class="btn" onclick="rstRestore()" style="flex:1;text-align:center">Restore backup</button>':''}</div>`};
 window.tgSum=()=>{const t=[...document.querySelectorAll('.tg')].reduce((s,x)=>s+(+x.value||0),0),el=$('#tgs');if(el)el.innerHTML=sumHtml(t)};
-window.tgMix=()=>{const c=calc(),ks=Object.keys(LBL),raw=ks.map(k=>c.gross?c.C[k][0]/c.gross*100:0),fl=raw.map(Math.floor);let rem=100-fl.reduce((a,b)=>a+b,0);
+window.tgMix=()=>{const c=calc(),ks=ALLOC,raw=ks.map(k=>(c.gross-c.C.Property[0])?c.C[k][0]/(c.gross-c.C.Property[0])*100:0),fl=raw.map(Math.floor);let rem=100-fl.reduce((a,b)=>a+b,0);
  raw.map((v,i)=>[v-fl[i],i]).sort((a,b)=>b[0]-a[0]).slice(0,rem).forEach(([,i])=>fl[i]++);
  document.querySelectorAll('.tg').forEach(x=>x.value=fl[ks.indexOf(x.dataset.k)]);tgSum()};
 window.tgSave=()=>{let t=0;document.querySelectorAll('.tg').forEach(x=>{const k=x.dataset.k,v=x.value.trim();let r=tgFind(k);if(!r){r={Asset:k};data.targets.push(r)}if(v==='')delete r.TargetPct;else{r.TargetPct=+v;t+=+v}});
@@ -439,6 +439,24 @@ SUM.daily=()=>{const{out,pk}=dayChanges(),sg=v=>(v>0?'+':'')+inr(v),cl=v=>v>=0?'
  (hr.length?`<div class="mu" style="font-size:10px;margin-top:12px">LAST DAYS · ALL HOLDINGS</div><table>${hr.map(x=>`<tr><td>${x.date}</td><td>${inr(x.v)}</td><td class="${cl(x.d)}">${sg(x.d)} (${pt(x.p)})</td></tr>`).join('')}</table>`:'')};
 {const _r0=render;render=function(){_r0();try{snap()}catch(e){}}}
 if(!LS('wl2_dd')&&!tabs.some(t=>t.w.some(w=>w.t==='daily'))){tabs[0].w.splice(2,0,{id:Date.now()+1,t:'daily',s:''});LS('wl2_dd',1);save()}
+
+// ---- overview: investments summary, holdings by account, allocation excludes property ----
+const ALLOC=['MF','Stocks','Gold','PPF','Cash'];
+TYPES.invest='Investments Summary';TYPES.acct='Holdings by Account';
+SUM.invest=()=>{const c=calc(),rows=ALLOC.map(k=>({l:LBL[k],i:c.C[k][1],v:c.C[k][0]})),ti=rows.reduce((s,x)=>s+x.i,0),tv=rows.reduce((s,x)=>s+x.v,0),g=tv-ti,gp=ti?g/ti*100:0;
+ return`<div class="mu" style="font-size:10px">TOTAL INVESTMENTS</div><div class="big">${inr(tv)}</div><div class="${g>=0?'up':'dn'}" style="margin-bottom:8px">${g>=0?'+':''}${inr(g)} · ${gp>=0?'+':''}${gp.toFixed(1)}% on ${inr(ti)} invested</div>
+ <table><tr><th>ASSET</th><th>INVESTED</th><th>VALUE</th><th>GAIN</th></tr>${rows.map(x=>`<tr><td>${x.l}</td><td>${inr(x.i)}</td><td><b>${inr(x.v)}</b></td><td>${pl(x.v,x.i)}</td></tr>`).join('')}</table><div class="mu" style="font-size:11px;margin-top:8px">Property ${inr(c.C.Property[0])} is not included above</div>`};
+SUM.acct=()=>{const m={},add=(a,t,i,v)=>{a=a||'(no account)';const o=m[a]=m[a]||{i:0,v:0,t:new Set()};o.i+=i;o.v+=v;o.t.add(t)};
+ data.stocks.forEach(r=>add(r.Account,'Stocks',n(r.Qty)*n(r.AvgPrice),n(r.Qty)*n(r.CMP)));
+ data.mf.forEach(r=>add(r.Account,'Mutual funds',n(r.Units)*n(r.AvgNAV),n(r.Units)*n(r.NAV)));
+ data.gold.filter(r=>r.Qty).forEach(r=>add(r.Account,'Gold',n(r.Qty)*n(r.AvgPrice),n(r.Qty)*n(r.CMP)));
+ data.ppf.forEach(r=>add(r.Account,'PPF',n(r.Balance),n(r.Balance)));data.cash.forEach(r=>add(r.Account,'Cash',n(r.Balance),n(r.Balance)));
+ const ks=Object.keys(m).sort((a,b)=>m[b].v-m[a].v);if(!ks.length)return'<p class="mu">No holdings yet.</p>';const tv=ks.reduce((s,k)=>s+m[k].v,0);
+ return`<table><tr><th>ACCOUNT</th><th>VALUE</th><th>SHARE</th><th>GAIN</th></tr>${ks.map(k=>`<tr><td><b>${k}</b><br><span class="mu" style="font-size:11px">${[...m[k].t].join(', ')}</span></td><td>${inr(m[k].v)}</td><td>${tv?(m[k].v/tv*100).toFixed(0):0}%</td><td>${pl(m[k].v,m[k].i)}</td></tr>`).join('')}</table><div class="tot">Total ${inr(tv)}</div>`};
+if(!LS('wl2_m1')){const ov=tabs.find(t=>t.name==='Overview')||tabs[0];let as=tabs.find(t=>t.name==='Assets');if(!as){as={name:'Assets',w:[]};tabs.splice(1,0,as)}
+ const mv=ov.w.filter(w=>w.t==='mf'||w.t==='stocks');ov.w=ov.w.filter(w=>w.t!=='mf'&&w.t!=='stocks');mv.reverse().forEach(w=>{if(!as.w.some(x=>x.t===w.t))as.w.unshift({...w,s:'s6'})});
+ if(!ov.w.some(w=>w.t==='invest'))ov.w.splice(1,0,{id:Date.now()+11,t:'invest',s:''});if(!ov.w.some(w=>w.t==='acct'))ov.w.splice(3,0,{id:Date.now()+12,t:'acct',s:'s6'});
+ LS('wl2_m1',1);save()}
 
 render();
 </script><script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js').catch(function(){});</script>
