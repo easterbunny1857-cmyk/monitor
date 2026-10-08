@@ -39,6 +39,7 @@ textarea{width:100%;height:100%;min-height:120px;border:0;background:transparent
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--tx);min-width:240px}
 dialog button{display:block;width:100%;margin:6px 0;text-align:left}
 @media(max-width:800px){.w,.w.s6,.w.s8{grid-column:span 12}}
+.hb{width:38px;height:38px;border:1px solid var(--bd);border-radius:9px;background:var(--card);color:var(--tx);font:inherit;font-size:15px;line-height:1;padding:0;margin:0 0 0 4px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}.hb:active{background:var(--bg)}.hb.sz{display:none}@media(min-width:801px){.hb.sz{display:inline-flex}}.wh{text-transform:uppercase}
 </style></head><body>
 <header>
 <h1>WealthLab<small>Personal portfolio · works offline</small></h1><div class="sp"></div>
@@ -169,12 +170,10 @@ const save=()=>{LS('wl2_tabs',tabs);LS('wl2_data',data)};
 function render(){data.gold=(data.gold||[]).filter(r=>r.Qty);
  $('#tabs').innerHTML=tabs.map((t,i)=>`<div class="tab ${i===act?'on':''}" data-i="${i}">${t.name}</div>`).join('')+'<div class="tab" data-i="new">+ New</div>';
  const g=$('#grid');g.innerHTML='';
- tabs[act].w.forEach(w=>{const e=document.createElement('div');e.className='w '+(w.s||'');e.draggable=true;
-  e.innerHTML=`<div class="wh"><b>${TYPES[w.t]}</b><span data-a="size" title="Resize">⤢</span><span data-a="del" title="Remove">✕</span></div><div class="wb">${TB[w.t]?table(w.t):SUM[w.t](w)}</div>`;
+ tabs[act].w.forEach(w=>{const e=document.createElement('div');e.className='w '+(w.s||'');e.draggable=matchMedia('(pointer:fine)').matches;
+  e.innerHTML=`<div class="wh"><b>${TYPES[w.t]}</b><button class="hb" onclick="wAct(${w.id},'up')" title="Move up">▲</button><button class="hb" onclick="wAct(${w.id},'down')" title="Move down">▼</button><button class="hb sz" onclick="wAct(${w.id},'size')" title="Change width">⤢</button><button class="hb" onclick="wAct(${w.id},'col')" title="Collapse or expand">${w.c?'▸':'▾'}</button><button class="hb" onclick="wAct(${w.id},'del')" title="Remove" style="color:var(--dn)">✕</button></div><div class="wb"${w.c?' style="display:none"':''}>${TB[w.t]?table(w.t):SUM[w.t](w)}</div>`;
   e.ondragstart=()=>drag=w.id;e.ondragover=ev=>{ev.preventDefault();e.classList.add('over')};e.ondragleave=()=>e.classList.remove('over');
   e.ondrop=ev=>{ev.preventDefault();const ws=tabs[act].w,a=ws.findIndex(x=>x.id===drag),b=ws.findIndex(x=>x.id===w.id);if(a<0||a===b)return;ws.splice(b,0,ws.splice(a,1)[0]);save();render()};
-  e.querySelector('[data-a=size]').onclick=()=>{const o=['','s6','s8','s12'];w.s=o[(o.indexOf(w.s||'')+1)%4];save();render()};
-  e.querySelector('[data-a=del]').onclick=()=>{tabs[act].w=tabs[act].w.filter(x=>x!==w);save();render()};
   g.appendChild(e)});
  if(!tabs[act].w.length)g.innerHTML='<p class="mu">Empty dashboard — click “+ Widget”.</p>'}
 $('#tabs').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;if(i==='new'){const nm=prompt('Dashboard name?');if(!nm)return;tabs.push({name:nm,w:[]});act=tabs.length-1}else act=+i;save();render()};
@@ -527,7 +526,7 @@ FIELDS.watchlist=['Name','Symbol','Value','Prev','Unit','Link'];FIELDS.macro=['N
 function mwDefaults(){const TE='https://tradingeconomics.com/',A='2026-10-05';return{
  watchlist:[{Name:'Brent crude',Symbol:'BZ=F',Value:101.31,Prev:102.25,Unit:'$/bbl',AsOf:A,Link:TE+'commodity/brent-crude-oil'},{Name:'WTI crude',Symbol:'CL=F',Value:90.62,Prev:91.11,Unit:'$/bbl',AsOf:A,Link:TE+'commodity/crude-oil'},
   {Name:'USD/INR',Symbol:'INR=X',Value:96.29,Unit:'₹ per $',AsOf:A,Link:TE+'india/currency'},{Name:'US 10Y yield',Symbol:'^TNX',Value:5.26,Prev:5.29,Unit:'%',AsOf:A,Link:TE+'united-states/government-bond-yield'},
-  {Name:'Nifty 50',Symbol:'^NSEI',Value:22556,Prev:22421,Unit:'index',AsOf:A,Link:TE+'india/stock-market'},{Name:'Gold (MCX)',Value:149880,Prev:150391,Unit:'₹/10g',AsOf:A,Link:TE+'commodity/gold'}],
+  {Name:'Nifty 50',Symbol:'^NSEI',Value:22556,Prev:22421,Unit:'index',AsOf:A,Link:TE+'india/stock-market'},{Name:'Gold (MCX)',Value:149880,Prev:150391,Unit:'₹/10g',AsOf:A,Link:TE+'commodity/gold'},{Name:'Silver (MCX)',Value:227978,Prev:225880,Unit:'₹/kg',AsOf:A,Link:TE+'commodity/silver'},{Name:'Silver (global)',Symbol:'SI=F',Unit:'$/oz',Link:TE+'commodity/silver'},{Name:'India VIX',Symbol:'^INDIAVIX',Value:14.67,Prev:14.46,Unit:'index',AsOf:A}],
  macro:[{Name:'RBI repo rate',Policy:'5.25%',LastMove:'Held at 5.25%, neutral stance (5 Aug 2026). Next decision 7 Oct.',Link:TE+'india/interest-rate'},{Name:'Fed funds target',Policy:'3.75–4.00%',LastMove:'Raised by 25 bp on 16 Sep 2026 (vote 12–0). Next decision 28 Oct.',Link:TE+'united-states/interest-rate'}],
  events:[{Date:'2026-10-07',Title:'RBI MPC decision (5–7 Oct)'},{Date:'2026-10-07',Title:'FOMC minutes (Sept meeting)'},{Date:'2026-10-28',Title:'FOMC decision (27–28 Oct)'},{Date:'2026-12-04',Title:'RBI MPC decision (2–4 Dec)'},{Date:'2026-12-09',Title:'FOMC decision + projections (8–9 Dec)'},{Date:'2027-01-27',Title:'FOMC decision (26–27 Jan)'},{Date:'2027-02-05',Title:'RBI MPC decision (3–5 Feb)'}]}}
 if(!data.watchlist)Object.assign(data,mwDefaults());
@@ -547,6 +546,23 @@ window.mwRefresh=async()=>{st('Refreshing markets…');let ok=0,bad=[];
  const u=data.watchlist.find(x=>/usd.?inr/i.test(x.Name));if(u&&bad.includes(u.Name)){try{const j=await(await fetch('https://open.er-api.com/v6/latest/USD')).json();if(j.rates&&j.rates.INR){u.Prev=u.Value;u.Value=+j.rates.INR.toFixed(3);u.AsOf=iso();bad=bad.filter(x=>x!==u.Name);ok++}}catch(e){}}
  save();render();st('Updated '+ok+(bad.length?' · enter manually: '+bad.join(', '):''))};
 if(!LS('wl2_m3')){const ov=tabs.find(t=>t.name==='Overview')||tabs[0];if(!ov.w.some(w=>w.t==='watch'))ov.w.splice(2,0,{id:Date.now()+31,t:'watch',s:'s8'});LS('wl2_m3',1);save()}
+
+// ---- widget move/collapse/remove buttons, dashboard ordering, silver + India VIX ----
+window.wAct=async(id,a)=>{const ws=tabs[act].w,i=ws.findIndex(x=>x.id===id);if(i<0)return;const w=ws[i];
+ if(a==='up'){if(i<1)return;[ws[i-1],ws[i]]=[ws[i],ws[i-1]]}
+ else if(a==='down'){if(i>ws.length-2)return;[ws[i+1],ws[i]]=[ws[i],ws[i+1]]}
+ else if(a==='col')w.c=!w.c;
+ else if(a==='size'){const o=['','s6','s8','s12'];w.s=o[(o.indexOf(w.s||'')+1)%4]}
+ else if(a==='del'){const ok=await modal({text:'Remove “'+TYPES[w.t]+'” from this dashboard? You can add it back from + Widget.',buttons:[['Remove',true,'p'],['Cancel',null]]});if(!ok)return;tabs[act].w=ws.filter(x=>x!==w)}
+ save();render()};
+function tabsHtml(){const dis=c=>c?' disabled style="opacity:.3"':'';
+ return`<div class="mu" style="margin-top:16px;font-size:11px">Dashboards: order of the tabs</div>`+tabs.map((t,i)=>`<div style="display:flex;align-items:center;gap:6px;margin-top:6px"><span style="flex:1"><b>${t.name}</b></span><button class="hb" onclick="tabMove(${i},-1)" title="Move earlier"${dis(i===0)}>▲</button><button class="hb" onclick="tabMove(${i},1)" title="Move later"${dis(i===tabs.length-1)}>▼</button><button class="hb" onclick="tabRename(${i})" title="Rename">✎</button>${t.w.some(w=>w.t==='settings')||tabs.length<2?'':`<button class="hb" onclick="tabDelete(${i})" style="color:var(--dn)" title="Delete">✕</button>`}</div>`).join('')}
+window.tabMove=(i,d)=>{const j=i+d;if(j<0||j>=tabs.length)return;const c=tabs[act];[tabs[i],tabs[j]]=[tabs[j],tabs[i]];act=tabs.indexOf(c);save();render()};
+window.tabRename=async i=>{const nm=await ask('Dashboard name',tabs[i].name);if(nm){tabs[i].name=nm;save();render()}};
+window.tabDelete=async i=>{if(tabs.length<2||tabs[i].w.some(w=>w.t==='settings'))return;const ok=await modal({text:'Delete the dashboard “'+tabs[i].name+'” and its widgets?',buttons:[['Delete',true,'p'],['Cancel',null]]});if(!ok)return;const c=tabs[act];tabs.splice(i,1);act=Math.max(0,tabs.indexOf(c));save();render()};
+{const _st2=SUM.settings;SUM.settings=()=>_st2()+tabsHtml()}
+if(!LS('wl2_m4')){const TE='https://tradingeconomics.com/',W=data.watchlist||(data.watchlist=[]),add=o=>{if(!W.some(x=>x.Name===o.Name))W.push(o)};
+ add({Name:'Silver (MCX)',Value:227978,Prev:225880,Unit:'₹/kg',AsOf:'2026-10-05',Link:TE+'commodity/silver'});add({Name:'Silver (global)',Symbol:'SI=F',Unit:'$/oz',Link:TE+'commodity/silver'});add({Name:'India VIX',Symbol:'^INDIAVIX',Value:14.67,Prev:14.46,Unit:'index',AsOf:'2026-10-05'});LS('wl2_m4',1);save()}
 
 render();
 </script><script>if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js').catch(function(){});</script>
